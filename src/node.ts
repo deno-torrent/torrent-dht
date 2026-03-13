@@ -32,20 +32,20 @@ export default class Node extends Peer {
     return this.#id
   }
 
-  update(port: number, addr: string): void {
+  override update(port: number, addr: string): void {
     super.update(port, addr)
     this.updateActivedAt()
   }
 
-  toString() {
+  override toString() {
     return `{id: ${this.#id.toString()}, port: ${this.port}, addr: ${this.addr}}`
   }
 
-  toCompact() {
+  override toCompact() {
     return packageCompactNode(this.#id, this.addr, this.port)
   }
 
-  static fromCompact(bytes: Uint8Array) {
+  static override fromCompact(bytes: Uint8Array) {
     const { id, port, addr } = extractCompactNode(bytes)
 
     return new Node(id, port, addr)

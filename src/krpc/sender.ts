@@ -7,5 +7,5 @@ export default interface Sender {
   sendPingRequest(targetNode: Node): Promise<void>
   sendFindNodeRequest(port: number, addr: string, targetId: Id): Promise<void>
   sendGetPeersRequest(targetNode: Node, infoHash: Uint8Array): Promise<void>
-  sendAnnouncePeerRequest(targetNode: Node, infoHash: Uint8Array): Promise<void>
+  sendAnnouncePeerRequest(targetNode: Node, infoHash: Uint8Array, token: string): Promise<void>
 }

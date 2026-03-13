@@ -1,5 +1,5 @@
 import { parse } from 'https://deno.land/x/dt_magnet@0.0.4/mod.ts'
-import { encodeHex } from 'std/encoding/hex.ts'
+import { encodeHex } from '@std/encoding/hex'
 import DHT from '~/src/dht.ts'
 import InfoHashManager from '~/src/info_hash_manager.ts'
 import RoutingTable from '~/src/routing_table.ts'
@@ -15,7 +15,8 @@ setInterval(async () => {
 }, 2000)
 
 setInterval(async () => {
-  const magnetLink = `magnet:?xt=urn:btih:TZRYKYVLDQP45WO66FBIMTG5LJYBTYNK&dn=ubuntu-22.04.2-live-server-amd64.iso&xl=1975971840&tr=https%3A%2F%2Ftorrent.ubuntu.com%2Fannounce`
+  const magnetLink =
+    `magnet:?xt=urn:btih:TZRYKYVLDQP45WO66FBIMTG5LJYBTYNK&dn=ubuntu-22.04.2-live-server-amd64.iso&xl=1975971840&tr=https%3A%2F%2Ftorrent.ubuntu.com%2Fannounce`
   const parsed = parse(magnetLink)
 
   const infoHash = InfoHashManager.get().find(encodeHex(parsed!.hash))

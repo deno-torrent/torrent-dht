@@ -1,4 +1,4 @@
-import { BytesUtil, NetUtil } from 'toolkit'
+import { BytesUtil, NetUtil } from '@deno-torrent/toolkit'
 import Id from '~/src/id.ts'
 
 const REQ_URL_IPV4 = 'https://api.ipify.org?format=json'
@@ -12,7 +12,7 @@ export const COMPAT_NODE_LEN = 26
 
 enum RequestType {
   IPv4 = REQ_URL_IPV4,
-  IPv6 = REQ_URL_IPV6
+  IPv6 = REQ_URL_IPV6,
 }
 
 /**
@@ -31,7 +31,7 @@ export function extractCompactAddr(bytes: Uint8Array) {
 
   return {
     addr: NetUtil.bytes2IPv4Str(ipBytes)!,
-    port: BytesUtil.bytes2Int(portBytes)
+    port: BytesUtil.bytes2Int(portBytes),
   }
 }
 
@@ -43,8 +43,8 @@ export function extractCompactAddr(bytes: Uint8Array) {
  */
 export function packageCompactAddr(addr: string, port: number) {
   const ipBytes = NetUtil.ipv4Str2Bytes(addr)!
-  const portBytes = BytesUtil.int2Bytes(port)!
-
+  const portBytes = new Uint8Array(2)
+  new DataView(portBytes.buffer).setUint16(0, port, false)
   return Uint8Array.from([...ipBytes, ...portBytes])
 }
 
@@ -65,15 +65,15 @@ export function extractCompactNode(bytes: Uint8Array) {
   return {
     id,
     port,
-    addr
+    addr,
   }
 }
 
 export function packageCompactNode(id: Id, addr: string, port: number) {
   const idBytes = id.bits.bytes
   const ipBytes = NetUtil.ipv4Str2Bytes(addr)!
-  const portBytes = BytesUtil.int2Bytes(port)!
-
+  const portBytes = new Uint8Array(2)
+  new DataView(portBytes.buffer).setUint16(0, port, false)
   return Uint8Array.from([...idBytes, ...ipBytes, ...portBytes])
 }
 

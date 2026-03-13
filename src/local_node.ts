@@ -10,7 +10,7 @@ export default class LocalNode extends Node {
     super(id, port, addr)
   }
 
-  isActive(): boolean {
+  override isActive(): boolean {
     // for local node, it is always active
     return true
   }
@@ -22,7 +22,7 @@ export default class LocalNode extends Node {
    */
   static async createLocalNode(port: number) {
     // generate a relatively stable nodeId, through the mac address
-    const idByMacAddr = await Id.createIdByMacAddr()
+    const idByMacAddr = Id.createIdByMacAddr()
     const addr = await getIP()
     return new LocalNode(idByMacAddr, port, addr)
   }

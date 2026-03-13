@@ -9,18 +9,18 @@ export type Request = {
 }
 
 /**
- * TranscationManager
- * @description handle krpc transcation
+ * TransactionManager
+ * @description handle krpc transaction
  */
-export default class TranscationManager<T> {
-  static #INSTANCE = new TranscationManager<Request>()
-  #EXPIRED_TIME = 1000 * 60 * 60 * 24 // 5 minutes, the borrowed tid will be returned to pool after 5 minutes
+export default class TransactionManager<T> {
+  static #INSTANCE = new TransactionManager<Request>()
+  #EXPIRED_TIME = 1000 * 60 * 60 * 24 // 24 小时后未完成的事务自动回收
   #CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
-  #ID_COUNT_MAX = this.#CHARS.length ^ 2 // max tid count
-  #ID_COUNT_HALF = this.#ID_COUNT_MAX / 2 // half of max tid count
+  #ID_COUNT_MAX = this.#CHARS.length * this.#CHARS.length // 最大并发事务数 62×62 = 3844（修复：原用 ^ 位异或）
+  #ID_COUNT_HALF = Math.floor(this.#ID_COUNT_MAX / 2) // 超过一半时触发过期清理
   #tidPool!: Set<string> // tid pool
   #expiredTime: number // expired time of a tid
-  #transcations = new Map<
+  #transactions = new Map<
     string, // tid
     {
       expiredAt: number // expired time of the tid
@@ -29,34 +29,34 @@ export default class TranscationManager<T> {
   >()
 
   /**
-   * create a transcation manager
-   * @param expredTime the expired time of a transcation
+   * create a transaction manager
+   * @param expiredTime the expired time of a transaction
    */
-  private constructor(expredTime?: number) {
-    this.#expiredTime = expredTime || this.#EXPIRED_TIME
+  private constructor(expiredTime?: number) {
+    this.#expiredTime = expiredTime || this.#EXPIRED_TIME
     this.initIdPool()
   }
 
   static get() {
-    return TranscationManager.#INSTANCE
+    return TransactionManager.#INSTANCE
   }
 
   /**
-   * create a new transcation
-   * @returns tid of the transcation
+   * create a new transaction
+   * @returns tid of the transaction
    */
   create(data?: T) {
     const tid = this.borrowTid()
     const expiredAt = Date.now() + this.#expiredTime
-    this.#transcations.set(tid, {
+    this.#transactions.set(tid, {
       expiredAt,
-      data
+      data,
     })
     return tid
   }
 
   /**
-   * get data from a transcation
+   * get data from a transaction
    * @param tid
    * @returns
    */
@@ -66,11 +66,11 @@ export default class TranscationManager<T> {
       return
     }
 
-    return this.#transcations.get(tid)?.data
+    return this.#transactions.get(tid)?.data
   }
 
   /**
-   * finish a transcation
+   * finish a transaction
    * @param tid
    */
   finish(tid: string) {
@@ -79,7 +79,7 @@ export default class TranscationManager<T> {
       return
     }
 
-    // delete transcation, and return tid to pool
+    // delete transaction, and return tid to pool
     this.putbackTid(tid)
   }
 
@@ -105,18 +105,22 @@ export default class TranscationManager<T> {
   }
 
   private borrowTid(): string {
-    // if broowed tid count is more than half of max tid count, clear expired tid
+    // if borrowed tid count is more than half of max tid count, clear expired tid
     // note: only expired tid will be returned to pool
-    if (this.#transcations.size > this.#ID_COUNT_HALF) {
+    if (this.#transactions.size > this.#ID_COUNT_HALF) {
       this.clearExpiredTid()
     }
 
     // if borrowed tid count is more than max tid count, force return some tid
-    if (this.#transcations.size >= this.#ID_COUNT_MAX) {
+    if (this.#transactions.size >= this.#ID_COUNT_MAX) {
       this.forcePutback()
     }
 
-    const tid = this.#tidPool.values().next().value
+    const result = this.#tidPool.values().next()
+    if (result.done) {
+      throw new Error('tid pool exhausted')
+    }
+    const tid = result.value
     this.#tidPool.delete(tid)
     return tid
   }
@@ -127,10 +131,10 @@ export default class TranscationManager<T> {
    */
   private forcePutback() {
     // return count is half of borrowed tid count
-    const returnCount = this.#transcations.size / 2
+    const returnCount = this.#transactions.size / 2
 
     // sort borrowed tid by expired time
-    const sortedTids = [...this.#transcations.entries()].sort((a, b) => a[1].expiredAt - b[1].expiredAt)
+    const sortedTids = [...this.#transactions.entries()].sort((a, b) => a[1].expiredAt - b[1].expiredAt)
 
     // return the first returnCount tid to pool
     for (let i = 0; i < returnCount; i++) {
@@ -146,11 +150,11 @@ export default class TranscationManager<T> {
    * @returns
    */
   private putbackTid(tid: string) {
-    if (!this.#transcations.has(tid)) {
+    if (!this.#transactions.has(tid)) {
       logger.warn(`tid ${tid} is not borrowed, can not return`)
       return
     }
-    this.#transcations.delete(tid)
+    this.#transactions.delete(tid)
     this.#tidPool.add(tid)
   }
 
@@ -158,7 +162,7 @@ export default class TranscationManager<T> {
    * clear expired tid in borrowed
    */
   private clearExpiredTid() {
-    const expiredTids = [...this.#transcations.entries()].filter(([tid, _]) => this.isExpiredTid(tid))
+    const expiredTids = [...this.#transactions.entries()].filter(([tid, _]) => this.isExpiredTid(tid))
     for (const [tid, _] of expiredTids) {
       this.putbackTid(tid)
     }
@@ -171,8 +175,8 @@ export default class TranscationManager<T> {
    */
   private isExpiredTid(tid: string): boolean {
     // if is not a borrowed tid, return false
-    if (!this.#transcations.has(tid)) return false
-    return this.#transcations.get(tid)?.expiredAt! < Date.now()
+    if (!this.#transactions.has(tid)) return false
+    return this.#transactions.get(tid)?.expiredAt! < Date.now()
   }
 
   /**
@@ -181,6 +185,6 @@ export default class TranscationManager<T> {
    * @returns true if the tid is valid
    */
   isValid(tid: string): boolean {
-    return this.#transcations.has(tid) && !this.isExpiredTid(tid)
+    return this.#transactions.has(tid) && !this.isExpiredTid(tid)
   }
 }

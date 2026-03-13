@@ -45,9 +45,7 @@ export default class InfoHashManager {
   add(infoHash: string, peer: Peer, token: string) {
     if (this.#infoHashes.size >= this.#MAX_INFO_HASH_NUM) {
       logger.error(
-        `the number of infoHashes exceeds the limit ${this.#MAX_INFO_HASH_NUM}, ignore ${infoHash}:${peer.addr}:${
-          peer.port
-        }`
+        `the number of infoHashes exceeds the limit ${this.#MAX_INFO_HASH_NUM}, ignore ${infoHash}:${peer.addr}:${peer.port}`,
       )
       return
     }
@@ -57,7 +55,7 @@ export default class InfoHashManager {
     // check token
     if (prevToken && prevToken !== token) {
       logger.error(
-        `the token of ${infoHash} [${token}] is not equal to [${prevToken}], ignore ${peer.addr}:${peer.port}`
+        `the token of ${infoHash} [${token}] is not equal to [${prevToken}], ignore ${peer.addr}:${peer.port}`,
       )
       return
     }
@@ -67,9 +65,7 @@ export default class InfoHashManager {
     // check the number of peers
     if (peers && peers.size >= this.#MAX_PEER_NUM_EACH_INFO_HASH) {
       logger.error(
-        `the number of peers of ${infoHash} exceeds the limit ${this.#MAX_PEER_NUM_EACH_INFO_HASH}, ignore ${
-          peer.addr
-        }:${peer.port}`
+        `the number of peers of ${infoHash} exceeds the limit ${this.#MAX_PEER_NUM_EACH_INFO_HASH}, ignore ${peer.addr}:${peer.port}`,
       )
       return
     }

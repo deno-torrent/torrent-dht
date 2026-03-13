@@ -1,9 +1,9 @@
-import { BytesUtil } from 'toolkit'
+import { BytesUtil } from '@deno-torrent/toolkit'
 import Id from '~/src/id.ts'
 import InfoHashManager from '~/src/info_hash_manager.ts'
 import { MessageHandler } from '~/src/krpc/krpc.ts'
 import Sender from '~/src/krpc/sender.ts'
-import TranscationManager, { Request } from '~/src/krpc/transcation_manager.ts'
+import TransactionManager, { Request } from '~/src/krpc/transaction_manager.ts'
 import { Message, MessageType, QueryType } from '~/src/message_factory.ts'
 import Node from '~/src/node.ts'
 import Peer from '~/src/peer.ts'
@@ -12,36 +12,21 @@ import logger from '~/src/util/log.ts'
 import { COMPAT_ADDR_V4_LEN, COMPAT_NODE_LEN } from '~/src/util/net.ts'
 
 export default class ResponseHandler implements MessageHandler {
-  #sender!: Sender
-
-  // tell the dispatcher this handler only handle response message
+  // tell the dispatcher this handler only handles response messages
   getHandleMessageType(): MessageType {
     return MessageType.RESPONSE
   }
 
-  /**
-   * handle the response message
-   * @param response the response message
-   * @param addr the address of the response message sender
-   * @param port the port of the response message sender
-   * @param sender the sender of the response message
-   * @returns
-   */
   async handle(response: Message, addr: string, port: number, sender: Sender): Promise<void> {
-    if (!this.#sender) {
-      this.#sender = sender
-    }
-
     const { t: tid, r: data, q: type } = response
 
     // check tid is valid
-    if (!TranscationManager.get().isValid(tid)) {
+    if (!TransactionManager.get().isValid(tid)) {
       logger.warn(`[${tid}}]received a invalid tid: ${tid}, drop the message, which from ${addr}:${port}`)
       return
     }
 
     // check response node id
-
     if (!Id.isValidId(data?.id)) {
       logger.warn(`[${tid}}]response without node id or invalid, drop the message, which from ${addr}:${port}`)
       return
@@ -49,22 +34,22 @@ export default class ResponseHandler implements MessageHandler {
 
     const responseNodeId = data?.id!
 
-    // get the request message from transcation,if not exist, drop the message, because the message is not requested by this node
-    const request = TranscationManager.get().getData(tid)
+    // get the request message from transaction; if not found, drop — the message was not requested by this node
+    const request = TransactionManager.get().getData(tid)
 
-    // finish the transcation
-    TranscationManager.get().finish(response.t)
+    // finish the transaction
+    TransactionManager.get().finish(response.t)
 
     if (!request) {
       logger.warn(
-        `[${tid}}]received a response which is not requested by this node, drop the message, which from ${addr}:${port}`
+        `[${tid}}]received a response which is not requested by this node, drop the message, which from ${addr}:${port}`,
       )
       return
     }
 
     const respNode = new Node(Id.fromUnit8Array(responseNodeId), port, addr)
 
-    // by the request message query type to handle the response
+    // dispatch by the original query type
     switch (request.type) {
       case QueryType.PING: {
         this.handlePingResponse(request, response, respNode, tid)
@@ -75,7 +60,7 @@ export default class ResponseHandler implements MessageHandler {
         break
       }
       case QueryType.GET_PEERS: {
-        this.handleGetPeersResponse(request, response, respNode, tid)
+        await this.handleGetPeersResponse(request, response, respNode, tid, sender)
         break
       }
       case QueryType.ANNOUNCE_PEER: {
@@ -110,7 +95,7 @@ export default class ResponseHandler implements MessageHandler {
     // check nodes bytes length
     if (nodesBytes.length % COMPAT_NODE_LEN != 0) {
       logger.error(
-        `[${tid}] invalid nodes bytes: ${nodesBytes}, because the length is not a multiple of ${COMPAT_NODE_LEN}`
+        `[${tid}] invalid nodes bytes: ${nodesBytes}, because the length is not a multiple of ${COMPAT_NODE_LEN}`,
       )
       return
     }
@@ -131,9 +116,16 @@ export default class ResponseHandler implements MessageHandler {
     }
   }
 
-  private async handleGetPeersResponse(request: Request, response: Message, respNode: Node, tid: string) {
+  private async handleGetPeersResponse(
+    request: Request,
+    response: Message,
+    respNode: Node,
+    tid: string,
+    sender: Sender,
+  ) {
     logger.info(`[<======RESPONSE-GET_PEERS-${tid}] received from ${respNode.addr}:${respNode.port}`)
-    // get infoHash from reqeust message
+
+    // get infoHash from request message
     const infoHash = request.infoHash
 
     // check info hash length
@@ -142,12 +134,13 @@ export default class ResponseHandler implements MessageHandler {
       return
     }
 
-    // token is a short binary string, always exsits
-    const token = response.t
-    // there are two types of response, one is nodes, the other is values
-    // nodes means the response node don't have peers which have the info hash, so it return the closer nodes
+    // token is provided by the responder in r.token
+    const token = response.r?.token
+
+    // there are two types of response: nodes or values
+    // nodes means the response node doesn't have peers for this info hash, so it returns closer nodes
     const nodesBytes = response.r?.nodes
-    // values means the response node have peers which have the info hash,and values is a list of compact address of peers
+    // values means the response node has peers; values is a list of compact peer addresses
     const peersBytesList = response.r?.values
 
     if (!token) {
@@ -174,9 +167,11 @@ export default class ResponseHandler implements MessageHandler {
       }
 
       logger.info(
-        `[${tid}] received ${peersBytesList.length} peers for info hash: ${BytesUtil.bytes2HexStr(
-          infoHash
-        )},peers is ${peers}`
+        `[${tid}] received ${peersBytesList.length} peers for info hash: ${
+          BytesUtil.bytes2HexStr(
+            infoHash,
+          )
+        },peers is ${peers}`,
       )
 
       if (peers.length <= 0) {
@@ -188,9 +183,11 @@ export default class ResponseHandler implements MessageHandler {
       InfoHashManager.get().addList(BytesUtil.bytes2HexStr(infoHash), peers, token)
     } else if (nodesBytes) {
       logger.info(
-        `[${tid}] received ${nodesBytes.length / COMPAT_NODE_LEN} nodes for info hash: ${BytesUtil.bytes2HexStr(
-          infoHash
-        )}`
+        `[${tid}] received ${nodesBytes.length / COMPAT_NODE_LEN} nodes for info hash: ${
+          BytesUtil.bytes2HexStr(
+            infoHash,
+          )
+        }`,
       )
 
       const nodesBytesList: Uint8Array[] = BytesUtil.chunkBytes(nodesBytes, COMPAT_NODE_LEN)
@@ -199,7 +196,7 @@ export default class ResponseHandler implements MessageHandler {
         const node = Node.fromCompact(nodeBytes)
 
         // send get peers request to the node
-        await this.#sender.sendGetPeersRequest(node, infoHash)
+        await sender.sendGetPeersRequest(node, infoHash)
       }
     } else {
       logger.error(`[${tid}] invalid response: ${JSON.stringify(response)}`)

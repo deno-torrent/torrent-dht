@@ -3,12 +3,12 @@ import ErrorResponseHandler from '~/src/krpc/handler/error_handler.ts'
 import RequestHandler from '~/src/krpc/handler/request_handler.ts'
 import ResponseHandler from '~/src/krpc/handler/response_handler.ts'
 import Sender from '~/src/krpc/sender.ts'
-import TranscationManager from '~/src/krpc/transcation_manager.ts'
+import TransactionManager from '~/src/krpc/transaction_manager.ts'
 import MessageFactory, { Message, MessageType, QueryType } from '~/src/message_factory.ts'
 import Node from '~/src/node.ts'
 import RoutingTable from '~/src/routing_table.ts'
 import logger from '~/src/util/log.ts'
-import { NetUtil } from 'toolkit'
+import { NetUtil } from '@deno-torrent/toolkit'
 
 export interface MessageHandler {
   /**
@@ -25,7 +25,11 @@ export interface MessageHandler {
 export class KRPC implements Sender {
   #port: number
   #udp: Deno.DatagramConn
-  #messageHandlers: MessageHandler[] = [new ResponseHandler(), new RequestHandler(), new ErrorResponseHandler()]
+  #messageHandlers: Map<MessageType, MessageHandler> = new Map([
+    [MessageType.RESPONSE, new ResponseHandler()],
+    [MessageType.QUERY, new RequestHandler()],
+    [MessageType.ERROR, new ErrorResponseHandler()],
+  ])
 
   private constructor(port: number) {
     this.#port = port
@@ -34,7 +38,7 @@ export class KRPC implements Sender {
     this.#udp = Deno.listenDatagram({
       port: this.#port,
       transport: 'udp',
-      hostname: '0.0.0.0' // listen on all interfaces
+      hostname: '0.0.0.0', // listen on all interfaces
     })
 
     // async handle response
@@ -57,14 +61,12 @@ export class KRPC implements Sender {
    * @param port the port of the node
    */
   async dispatchMessage(message: Message, address: string, port: number) {
-    for (const handler of this.#messageHandlers) {
-      if (handler.getHandleMessageType() !== message.y) {
-        continue
-      }
-
-      // if the handler can handle the message, call the handle() method
-      await handler.handle(message, address, port, this)
+    const handler = this.#messageHandlers.get(message.y)
+    if (!handler) {
+      logger.error(`no handler for message type: ${message.y}`)
+      return
     }
+    await handler.handle(message, address, port, this)
   }
 
   /**
@@ -96,9 +98,9 @@ export class KRPC implements Sender {
       const tid = message.t
 
       try {
-        logger.info(`╔============================= HANDLE MESSAFGE START ===========================╗${tid}`)
+        logger.info(`╔============================= HANDLE MESSAGE START ===========================╗${tid}`)
         await this.dispatchMessage(message, address, port)
-        logger.info(`╚============================= HANDLE MESSAFGE END   ===========================╝${tid}\n`)
+        logger.info(`╚============================= HANDLE MESSAGE END   ===========================╝${tid}\n`)
       } catch (e) {
         logger.error(`[<======UDP-handlePacket] dispatch message failed: ${e}`)
       }
@@ -119,7 +121,7 @@ export class KRPC implements Sender {
       await this.#udp.send(bencodeMessage, {
         transport: 'udp',
         hostname: addr,
-        port: port
+        port: port,
       })
       // logger.info(`[======>SEND] send message to ${addr}:${port} success: (${JSON.stringify(message)}`)
     } catch (e) {
@@ -140,13 +142,12 @@ export class KRPC implements Sender {
    *
    * @param targetNode which node to ask
    * @param nodeId the node id of the local node
-   *
    */
   async sendPingRequest(targetNode: Node) {
-    const tid = TranscationManager.get().create({
+    const tid = TransactionManager.get().create({
       type: QueryType.PING,
       addr: targetNode.addr,
-      port: targetNode.port
+      port: targetNode.port,
     })
 
     const messageFC = MessageFactory.requestPing(tid, RoutingTable.get().localNode.id)
@@ -167,10 +168,10 @@ export class KRPC implements Sender {
    * @param addr
    */
   async sendFindNodeRequest(port: number, addr: string, targetId: Id) {
-    const tid = TranscationManager.get().create({
+    const tid = TransactionManager.get().create({
       type: QueryType.FIND_NODE,
       addr: addr,
-      port: port
+      port: port,
     })
 
     const messageFC = MessageFactory.requestFindNode(tid, RoutingTable.get().localNode.id, targetId)
@@ -184,11 +185,11 @@ export class KRPC implements Sender {
    * @param infoHash the info hash of the file
    */
   async sendGetPeersRequest(targetNode: Node, infoHash: Uint8Array) {
-    const tid = TranscationManager.get().create({
+    const tid = TransactionManager.get().create({
       type: QueryType.GET_PEERS,
       infoHash: infoHash,
       addr: targetNode.addr,
-      port: targetNode.port
+      port: targetNode.port,
     })
     const messageFC = MessageFactory.requestGetPeers(tid, RoutingTable.get().localNode.id, infoHash)
     await this.sendMessage(targetNode.port, targetNode.addr, messageFC)
@@ -204,14 +205,20 @@ export class KRPC implements Sender {
    * @param infoHash the info hash of the file
    * @param token the token of the node
    */
-  async sendAnnouncePeerRequest(targetNode: Node, infoHash: Uint8Array) {
-    const tid = TranscationManager.get().create({
+  async sendAnnouncePeerRequest(targetNode: Node, infoHash: Uint8Array, token: string) {
+    const tid = TransactionManager.get().create({
       type: QueryType.ANNOUNCE_PEER,
       infoHash: infoHash,
       addr: targetNode.addr,
-      port: targetNode.port
+      port: targetNode.port,
     })
-    const messageFC = MessageFactory.requestAnnouncePeer(tid, RoutingTable.get().localNode.id, infoHash, this.#port)
+    const messageFC = MessageFactory.requestAnnouncePeer(
+      tid,
+      RoutingTable.get().localNode.id,
+      infoHash,
+      this.#port,
+      token,
+    )
     await this.sendMessage(targetNode.port, targetNode.addr, messageFC)
   }
 
@@ -220,10 +227,10 @@ export class KRPC implements Sender {
    * @param bootstrapNode {addr: string, port: number}
    */
   async sendPingBootrapNodesRequest({ addr, port }: { addr: string; port: number }) {
-    const tid = TranscationManager.get().create({
+    const tid = TransactionManager.get().create({
       type: QueryType.PING,
       addr: addr,
-      port: port
+      port: port,
     })
     const messageFC = MessageFactory.requestPing(tid, RoutingTable.get().localNode.id)
     await this.sendMessage(port, addr, messageFC)

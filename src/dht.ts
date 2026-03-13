@@ -3,7 +3,7 @@ import { KRPC } from '~/src/krpc/krpc.ts'
 import LocalNode from '~/src/local_node.ts'
 import RoutingTable from '~/src/routing_table.ts'
 import logger from '~/src/util/log.ts'
-import { NetUtil } from 'toolkit'
+import { NetUtil } from '@deno-torrent/toolkit'
 
 /**
  * the host node of the dht network
@@ -12,20 +12,20 @@ export default class DHT {
   static #DEFAULT_BOOTSTRAP_NODES = [
     {
       addr: 'router.bittorrent.com',
-      port: 6881
+      port: 6881,
     },
     {
       addr: 'dht.transmissionbt.com',
-      port: 6881
+      port: 6881,
     },
     {
       addr: 'router.utorrent.com',
-      port: 6881
+      port: 6881,
     },
     {
       addr: 'dht.aelitis.com',
-      port: 6881
-    }
+      port: 6881,
+    },
   ]
   #bootstrapNodes: { addr: string; port: number }[] // the bootstrap nodes
   #krpc: KRPC // the krpc protocol

@@ -1,34 +1,40 @@
-import { BitArray } from 'toolkit'
+import { BitArray } from '@deno-torrent/toolkit'
+import Id from '~/src/id.ts'
 import Node from '~/src/node.ts'
 import logger from '~/src/util/log.ts'
-import Id from '~/src/id.ts'
 
+/**
+ * K-桶（K-Bucket）实现
+ *
+ * 按 XOR 距离范围 [start, end] 存储 DHT 节点，容量上限由构造时的 `capacity` 决定。
+ * 新节点插入到队头（最近活跃），满时淘汰队尾（最久未活跃）。
+ */
 export default class Bucket {
   #nodes: Node[] = []
-  #capacity: number // the capacity of the bucket
+  #capacity: number
   #updatedAt = Date.now()
-  #start: BitArray // the lower limit of the bucket
-  #end: BitArray // the upper limit of the bucket
+  #start: BitArray // 桶的 ID 下界（包含）
+  #end: BitArray // 桶的 ID 上界（包含）
 
   /**
-   * Bucket is a sorted list of nodes
-   * @param capacity the capacity of the bucket default is 8
+   * 创建一个 K-桶
+   *
+   * @param capacity 桶的最大节点数，默认 8
+   * @param start    桶覆盖 ID 范围的下界（160 位）
+   * @param end      桶覆盖 ID 范围的上界（160 位）
    */
   constructor(capacity: number = 8, start: BitArray, end: BitArray) {
-    // check capacity
     if (capacity <= 0) {
       throw new Error('bucket capacity must be greater than 0')
     }
 
-    // check start and end, sometimes start and end are same, when the bucket contains local node, and the start and end also equal to local node id
     if (start.greaterThan(end)) {
       throw new Error(`start must be less than end, start is ${start.toString()}, end is ${end.toString()}`)
     }
 
-    // start and end bit length must be same, and equal to 160
     if (start.length !== end.length || start.length !== 160) {
       throw new Error(
-        `start and end bit length must be same, and equal to 160, start length is ${start.length}, end length is ${end.length}`
+        `start and end bit length must be same and equal to 160, start length is ${start.length}, end length is ${end.length}`,
       )
     }
 
@@ -37,114 +43,104 @@ export default class Bucket {
     this.#end = end
   }
 
-  get start() {
+  /** 桶覆盖范围的下界 */
+  get start(): BitArray {
     return this.#start
   }
 
-  get end() {
+  /** 桶覆盖范围的上界 */
+  get end(): BitArray {
     return this.#end
   }
 
-  /**
-   * get the size of the bucket
-   */
-  get size() {
+  /** 当前桶中节点数量 */
+  get size(): number {
     return this.#nodes.length
   }
 
-  /**
-   * get the capacity of the bucket
-   */
-  get updatedAt() {
+  /** 桶最近一次更新的时间戳（毫秒） */
+  get updatedAt(): number {
     return this.#updatedAt
   }
 
   /**
-   * get oldest node in the bucket
+   * 最久未活跃的节点（队尾节点），桶为空时返回 `undefined`
    */
-  get oldest() {
-    if (this.#nodes.length === 0) {
-      return undefined
-    }
-
-    // the oldest node is the last node in the bucket
-    return this.#nodes[this.#nodes.length - 1]
-  }
-
-  get latest() {
-    if (this.#nodes.length === 0) {
-      return undefined
-    }
-
-    // the latest node is the first node in the bucket
-    return this.#nodes[0]
+  get oldest(): Node | undefined {
+    return this.#nodes.length === 0 ? undefined : this.#nodes[this.#nodes.length - 1]
   }
 
   /**
-   * check the node is in the interval of the bucket
-   * e.g. bucket interval is [0000, 1111], node is 0011, return true
-   * @param id
+   * 最近活跃的节点（队头节点），桶为空时返回 `undefined`
    */
-  withinRnage(id: Id) {
+  get latest(): Node | undefined {
+    return this.#nodes.length === 0 ? undefined : this.#nodes[0]
+  }
+
+  /**
+   * 判断给定 ID 是否落在该桶的覆盖范围内
+   *
+   * @param id 待判断的节点 ID
+   * @returns 若 `start <= id.bits <= end` 则返回 `true`
+   */
+  withinRange(id: Id): boolean {
     return id.bits.greaterThanOrEqual(this.#start) && id.bits.lessThanOrEqual(this.#end)
   }
 
   /**
-   * add a node to the bucket, return true if the node is added, otherwise return false
-   * if the node is already in the bucket, just update the last active time
-   * if the bucket is full, remove a oldest node, and add the new node to top of the bucket
+   * 向桶中添加节点
    *
-   * @param node the node to be added
-   * @returns true if the node is added, otherwise return false
+   * - 若节点已存在，则更新其活跃时间，返回 `false`（表示未新增）
+   * - 若桶已满，淘汰最旧节点后再插入
+   * - 新节点插入到队头（最近活跃位置）
+   *
+   * @param node 要添加的节点
+   * @returns 节点被新增时返回 `true`，已存在则返回 `false`
    */
   add(node: Node): boolean {
     this.#updatedAt = Date.now()
 
-    const old = this.#nodes.find((n) => n.id === node.id)
+    // 使用值相等判断（Id.equals）而非引用比较
+    const existing = this.#nodes.find((n) => n.id.equals(node.id))
 
-    // if the node is already in the bucket, update the last active time
-    if (old) {
-      old.update(node.port, node.addr)
-      logger.warn(`node ${node.id.toString()} is already in the bucket,just update the last active time`)
+    if (existing) {
+      existing.update(node.port, node.addr)
+      logger.warn(`node ${node.id.toString()} is already in the bucket, updating last active time`)
       return false
     }
 
-    // if the bucket is full, remove a inactive node
     if (this.isFull()) {
       this.remove(this.oldest!)
     }
 
-    // add the node to the bucket
     node.updateActivedAt()
-
-    // add to the start of the array
     this.#nodes.unshift(node)
 
     return true
   }
 
-  /**
-   * check the bucket is full
-   * @returns
-   */
-  isFull() {
+  /** 判断桶是否已达容量上限 */
+  isFull(): boolean {
     return this.#nodes.length >= this.#capacity
   }
 
-  isEmpty() {
+  /** 判断桶是否为空 */
+  isEmpty(): boolean {
     return this.#nodes.length === 0
   }
 
   /**
-   * remove a node, return true if the node is removed, otherwise return false if the node is not in the bucket
-   * @param node
+   * 从桶中移除指定节点
+   *
+   * @param node 要移除的节点
+   * @returns 节点存在并成功移除返回 `true`，否则返回 `false`
    */
-  remove(node: Node) {
+  remove(node: Node): boolean {
     this.#updatedAt = Date.now()
 
     for (let i = 0; i < this.#nodes.length; i++) {
-      if (this.#nodes[i].id === node.id) {
-        // remove the node
+      // 使用值相等判断（Id.equals）而非引用比较
+      if (this.#nodes[i].id.equals(node.id)) {
         this.#nodes.splice(i, 1)
         return true
       }
@@ -154,33 +150,39 @@ export default class Bucket {
   }
 
   /**
-   * obtain latest nodes from the bucket
-   * @param count the count of the nodes to be obtained, max is bucket capacity
-   * @returns the nodes
+   * 获取桶中最近活跃的前 N 个节点
+   *
+   * @param count 获取数量，最大不超过桶当前节点数，默认 8
+   * @returns 节点列表（按活跃时间从新到旧排序）
    */
   obtainNodes(count = 8): Node[] {
     const maxCount = Math.min(count, this.#nodes.length)
     return this.#nodes.slice(0, maxCount)
   }
 
+  /** 桶中所有节点（只读引用） */
   get nodes(): Node[] {
     return this.#nodes
   }
 
-  cloestNodes(targetNodeId: Id, count: number) {
+  /**
+   * 按 XOR 距离排序，返回距目标 ID 最近的前 N 个节点
+   *
+   * @param targetNodeId 目标节点 ID
+   * @param count        返回数量
+   * @returns 距离最近的节点列表
+   */
+  closestNodes(targetNodeId: Id, count: number): Node[] {
     const maxCount = Math.min(count, this.#nodes.length)
 
-    // sort the nodes by the distance to the target node
-    return this.#nodes
-      .sort((a, b) => {
-        return a.id.bits.xor(targetNodeId.bits).lessThan(b.id.bits.xor(targetNodeId.bits)) ? -1 : 1
-      })
+    return [...this.#nodes]
+      .sort((a, b) => (a.id.bits.xor(targetNodeId.bits).lessThan(b.id.bits.xor(targetNodeId.bits)) ? -1 : 1))
       .slice(0, maxCount)
   }
 
-  toString() {
-    return `Bucket-filled(${this.size})-remained(${this.#capacity - this.size}):[${this.#nodes
-      .map((node) => node.toString())
-      .join(', ')}]`
+  toString(): string {
+    return `Bucket-filled(${this.size})-remained(${this.#capacity - this.size}):[${
+      this.#nodes.map((n) => n.toString()).join(', ')
+    }]`
   }
 }

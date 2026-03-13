@@ -1,4 +1,4 @@
-import { NetUtil } from 'toolkit'
+import { NetUtil } from '@deno-torrent/toolkit'
 import { extractCompactAddr, isAddr, packageCompactAddr } from '~/src/util/net.ts'
 
 /**

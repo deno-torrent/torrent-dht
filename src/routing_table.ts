@@ -1,20 +1,29 @@
+import { BitArray } from '@deno-torrent/toolkit'
 import Bucket from '~/src/bucket.ts'
 import Id from '~/src/id.ts'
 import LocalNode from '~/src/local_node.ts'
 import Node from '~/src/node.ts'
 import logger from '~/src/util/log.ts'
-import { BitArray } from 'toolkit'
 
 /**
- * RoutingTable contains a list of buckets, each bucket contains a list of nodes
+ * Kademlia 路由表
+ *
+ * 维护 160 个 K-桶（K-Bucket），每个桶覆盖 ID 空间的一个子范围。
+ * 采用单例模式，通过 `RoutingTable.init()` 初始化，`RoutingTable.get()` 获取实例。
  */
 export default class RoutingTable {
   static #INSTANCE: RoutingTable
-  static BUCKET_CAPACITY = 8 // the max node count in a bucket
+  /** 每个 K-桶的最大节点容量 */
+  static BUCKET_CAPACITY = 8
   #localNode: LocalNode
-  #buckets: Bucket[] = [] // <prefix, bucket>
+  #buckets: Bucket[] = []
 
-  static get() {
+  /**
+   * 获取路由表单例实例
+   *
+   * @throws 若尚未通过 `init()` 初始化，则抛出错误
+   */
+  static get(): RoutingTable {
     if (!RoutingTable.#INSTANCE) {
       throw new Error('RoutingTable has not been initialized')
     }
@@ -26,131 +35,131 @@ export default class RoutingTable {
     this.initBuckets()
   }
 
-  static init(localNode: LocalNode) {
+  /**
+   * 初始化路由表单例（只能调用一次）
+   *
+   * @param localNode 本地节点
+   * @throws 若已经初始化过，则抛出错误
+   */
+  static init(localNode: LocalNode): void {
     if (RoutingTable.#INSTANCE) {
       throw new Error('RoutingTable has been initialized')
-    } else {
-      RoutingTable.#INSTANCE = new RoutingTable(localNode)
     }
+    RoutingTable.#INSTANCE = new RoutingTable(localNode)
   }
 
-  get localNode() {
+  /** 本地节点 */
+  get localNode(): LocalNode {
     return this.#localNode
   }
 
+  /** 所有 K-桶 */
   get buckets(): Bucket[] {
     return this.#buckets
   }
 
-  get nodeCount() {
+  /** 路由表中所有节点的总数 */
+  get nodeCount(): number {
     let count = 0
-    for (const bucket of this.#buckets.values()) {
+    for (const bucket of this.#buckets) {
       count += bucket.size
     }
     return count
   }
 
   /**
-   * initialize the buckets, the number of buckets is equal to the length of the id, e.g. 160
-   * after the id of local node was known, the buckets can be initialized
+   * 初始化 K-桶列表
    *
-   * e.g here is a 2-bit binary tree, if local node id 01, we can split it to 2 subtree, each bucket is subset of the subtree,
-   *       *
-   *    /     \
-   *   1      [0]
-   *  / \     /  \
-   * 1   0  [1]   0
-   *
-   *
-   * bucket-0: just a leaf node 0, no children.
-   *   [0] parent is 0
-   *
-   * bucket-1: a full binary tree, the root is 1, the left child is 1, the right child is 0.
-   *   [1] parent is none
-   *  /   \
-   * 1     0
-   *
+   * 采用二叉树递归划分 ID 空间，生成与本地节点 ID 对应的 160 个桶。
+   * 局部节点所在的半空间被进一步细分，远端半空间保留一个桶。
    */
-  initBuckets() {
+  initBuckets(): void {
     this.#buckets.push(
-      ...this.generateBuckets(BitArray.fromBinaryString('0'.repeat(160)), BitArray.fromBinaryString('1'.repeat(160)))
+      ...this.generateBuckets(BitArray.fromBinaryString('0'.repeat(160)), BitArray.fromBinaryString('1'.repeat(160))),
     )
-
     logger.info(`init ${this.#buckets.length} buckets`)
   }
 
   /**
-   * use binary recursion to generate buckets, the bucket count is equal to the length of the id(160)
+   * 递归生成 K-桶列表
    *
-   * @param start
-   * @param end must be 2^x, because the bucket is a full binary tree
-   * @returns
+   * 将 [start, end] 区间对半分：
+   * - 若本地节点落在左半，则右半形成一个桶，左半继续递归
+   * - 若本地节点落在右半，则左半形成一个桶，右半继续递归
+   *
+   * @param start 区间下界
+   * @param end   区间上界
+   * @returns 生成的 K-桶列表
    */
   generateBuckets(start: BitArray, end: BitArray): Bucket[] {
-    // [1 2 3 4] => [1 (2)] [(3) 4] => (2) is left end, (3) is right start
-
     const leftStart = start
     const leftEnd = BitArray.fromBigInt((start.toBigInt() + end.toBigInt() - 1n) / 2n, 160)
     const rightStart = BitArray.fromBigInt(leftEnd.toBigInt() + 1n, 160)
     const rightEnd = end
 
-    // only left local node, stop recursion
+    // 区间收缩至只剩本地节点，停止递归
     if (start.equals(end) && start.equals(this.#localNode.id.bits)) {
       return []
     }
 
-    // logger.info(`local node ${localNode.id.bits.toString()}`)
-    const leftBu = new Bucket(RoutingTable.BUCKET_CAPACITY, leftStart, leftEnd)
-    const rightBu = new Bucket(RoutingTable.BUCKET_CAPACITY, rightStart, rightEnd)
+    const leftBucket = new Bucket(RoutingTable.BUCKET_CAPACITY, leftStart, leftEnd)
+    const rightBucket = new Bucket(RoutingTable.BUCKET_CAPACITY, rightStart, rightEnd)
 
-    if (leftBu.withinRnage(this.#localNode.id)) {
-      return [rightBu, ...this.generateBuckets(leftStart, leftEnd)]
-    } else if (rightBu.withinRnage(this.#localNode.id)) {
-      return [leftBu, ...this.generateBuckets(rightStart, rightEnd)]
+    if (leftBucket.withinRange(this.#localNode.id)) {
+      return [rightBucket, ...this.generateBuckets(leftStart, leftEnd)]
+    } else if (rightBucket.withinRange(this.#localNode.id)) {
+      return [leftBucket, ...this.generateBuckets(rightStart, rightEnd)]
     } else {
       throw new Error('local node is not in the range of the buckets')
     }
   }
 
   /**
-   * add a node to the routing table
-   * @param node
+   * 将节点加入路由表
+   *
+   * @param node 要加入的节点
+   * @returns 加入成功返回 `true`，否则返回 `false`（桶满且无法替换，或 ID 不在任何桶范围内）
    */
-  add(node: Node) {
-    // logger.info(`current node count is ${this.nodeCount}, before add node ${node.id.toIntSting()}`)
-    // use itrator to iterate the buckets, beacuse there may be some add or remove operation in the loop
-    for (const bucket of this.#buckets.values()) {
-      // if the node is within the bucket range, add the node to the bucket
-      if (bucket.withinRnage(node.id)) {
-        // logger.info(
-        //   `node(${node.id.toIntSting()}) is in the bucket[${bucket.start.toIntString()}, ${bucket.end.toIntString()}]]`
-        // )
+  add(node: Node): boolean {
+    for (const bucket of this.#buckets) {
+      if (bucket.withinRange(node.id)) {
         return bucket.add(node)
       }
     }
     return false
   }
 
-  addNodes(nodes: Node[]) {
+  /**
+   * 批量将节点加入路由表
+   *
+   * @param nodes 节点列表
+   */
+  addNodes(nodes: Node[]): void {
     for (const node of nodes) {
       this.add(node)
     }
   }
 
   /**
-   * remove a node from the routing table
-   * @param node
+   * 从路由表移除节点
+   *
+   * @param node 要移除的节点
    */
-  remove(node: Node) {
-    for (const bucket of this.#buckets.values()) {
-      if (bucket.withinRnage(node.id)) {
+  remove(node: Node): void {
+    for (const bucket of this.#buckets) {
+      if (bucket.withinRange(node.id)) {
         bucket.remove(node)
         break
       }
     }
   }
 
-  removeByNodeId(nodeId: Id) {
+  /**
+   * 按节点 ID 移除节点
+   *
+   * @param nodeId 要移除的节点 ID
+   */
+  removeByNodeId(nodeId: Id): void {
     for (const node of this.getAllNodes()) {
       if (node.id.equals(nodeId)) {
         this.remove(node)
@@ -159,7 +168,12 @@ export default class RoutingTable {
     }
   }
 
-  removeByIp(ip: string) {
+  /**
+   * 按 IP 地址移除所有匹配节点
+   *
+   * @param ip IP 地址字符串
+   */
+  removeByIp(ip: string): void {
     for (const node of this.getAllNodes()) {
       if (node.addr === ip) {
         this.remove(node)
@@ -167,87 +181,95 @@ export default class RoutingTable {
     }
   }
 
-  removeNodes(nodes: Node[]) {
+  /**
+   * 批量移除节点
+   *
+   * @param nodes 要移除的节点列表
+   */
+  removeNodes(nodes: Node[]): void {
     for (const node of nodes) {
       this.remove(node)
     }
   }
 
-  removeClosestNode(targetNode: Node) {
+  /**
+   * 移除距指定节点最近的所有节点
+   *
+   * @param targetNode 目标节点
+   */
+  removeClosestNode(targetNode: Node): void {
     const closestNodes = this.findClosestNodes(targetNode.id)
-
-    if (!closestNodes) {
-      return
-    }
-
-    this.removeNodes(closestNodes)
-  }
-
-  getRandomNode() {
-    for (const bucket of this.#buckets.values()) {
-      if (bucket.isEmpty()) continue
-      return bucket.latest
+    if (closestNodes.length > 0) {
+      this.removeNodes(closestNodes)
     }
   }
 
-  getAllNodes() {
+  /**
+   * 随机返回路由表中的一个节点（取第一个非空桶的队头节点）
+   *
+   * @returns 节点，若路由表为空则返回 `undefined`
+   */
+  getRandomNode(): Node | undefined {
+    for (const bucket of this.#buckets) {
+      if (!bucket.isEmpty()) return bucket.latest
+    }
+    return undefined
+  }
+
+  /**
+   * 获取路由表中所有节点
+   *
+   * @returns 节点列表
+   */
+  getAllNodes(): Node[] {
     const nodes: Node[] = []
-    for (const bucket of this.#buckets.values()) {
-      if (bucket.isEmpty()) continue
-      for (const node of bucket.nodes.values()) {
-        nodes.push(node)
+    for (const bucket of this.#buckets) {
+      if (!bucket.isEmpty()) {
+        nodes.push(...bucket.nodes)
       }
     }
     return nodes
   }
 
   /**
-   * find the closest node to the target node
-   * @param targetNodeId
-   * @returns the closest nodes to the target node
+   * 按 XOR 距离找到距目标 ID 最近的前 N 个节点
+   *
+   * @param targetNodeId 目标节点 ID
+   * @param count        返回数量，默认 8
+   * @returns 按距离从近到远排序的节点列表
    */
-  findClosestNodes(targetNodeId: Id, count = 8) {
+  findClosestNodes(targetNodeId: Id, count = 8): Node[] {
     logger.info(`[findClosestNodes] total node count is ${this.nodeCount}`)
 
-    // sort all nodes by distance to the target node
-    const nodes = this.getAllNodes().sort((a, b) => {
-      return a.id.bits.xor(targetNodeId.bits).lessThan(b.id.bits.xor(targetNodeId.bits)) ? -1 : 1
-    })
+    const nodes = this.getAllNodes().sort((a, b) =>
+      a.id.bits.xor(targetNodeId.bits).lessThan(b.id.bits.xor(targetNodeId.bits)) ? -1 : 1
+    )
 
-    const MAX_NODE_COUNT = Math.min(this.nodeCount, count)
-
-    // return the first count nodes
-    return nodes.slice(0, MAX_NODE_COUNT)
-  }
-
-  updateNode(newNode: Node) {
-    const old = this.findNode(newNode.id)
-    if (!old) {
-      return
-    }
-    old.update(newNode.port, newNode.addr)
+    return nodes.slice(0, Math.min(this.nodeCount, count))
   }
 
   /**
-   * find a bucket closest to the target node
-   * @param id
+   * 更新路由表中已存在节点的连接信息
+   *
+   * @param newNode 包含最新连接信息的节点对象
    */
-  private findClosestBucket(nodeId: Id) {
-    for (const bucket of this.#buckets.values()) {
-      if (bucket.isEmpty()) continue
-
-      if (bucket.withinRnage(nodeId)) {
-        // if bucket is empty
-        return bucket
-      }
+  updateNode(newNode: Node): void {
+    const old = this.findNode(newNode.id)
+    if (old) {
+      old.update(newNode.port, newNode.addr)
     }
-    return undefined
   }
 
-  findNode(nodeId: Id) {
-    for (const bucket of this.#buckets.values()) {
+  /**
+   * 在路由表中查找指定 ID 的节点
+   *
+   * @param nodeId 节点 ID
+   * @returns 找到则返回节点对象，否则返回 `undefined`
+   */
+  findNode(nodeId: Id): Node | undefined {
+    for (const bucket of this.#buckets) {
       if (bucket.isEmpty()) continue
-      for (const node of bucket.nodes.values()) {
+      for (const node of bucket.nodes) {
         if (node.id.equals(nodeId)) {
           return node
         }

@@ -1,4 +1,4 @@
-import { BitArray, BytesUtil, NetUtil } from 'toolkit'
+import { BitArray, BytesUtil, NetUtil } from '@deno-torrent/toolkit'
 import { randomSha1, sha1 } from '~/src/util/hash.ts'
 
 /**
@@ -13,13 +13,14 @@ export default class Id {
    * @param value the value of the id, default is a random sha1 hash
    */
   private constructor(value: BitArray) {
-    if (value.bytes.length !== Id.BYTES_LENGTH)
+    if (value.bytes.length !== Id.BYTES_LENGTH) {
       throw new Error(`id length must be ${Id.BYTES_LENGTH}, but got ${value.length}`)
+    }
     this.#value = value
   }
 
-  static isValidId(id?: Uint8Array) {
-    return id && id.length === Id.BYTES_LENGTH
+  static isValidId(id?: Uint8Array): boolean {
+    return !!(id && id.length === Id.BYTES_LENGTH)
   }
 
   static fromUnit8Array(bytes: Uint8Array) {
@@ -65,8 +66,8 @@ export default class Id {
    * create a id by the mac address
    * @returns
    */
-  static async createIdByMacAddr() {
-    const macAddrs = await NetUtil.getMacAddr()
+  static createIdByMacAddr(): Id {
+    const macAddrs = NetUtil.getMacAddr()
     if (!macAddrs || macAddrs.length === 0) {
       throw new Error('cannot get the mac address')
     }
