@@ -23,7 +23,7 @@ export default class Peer {
    * create a new peer from compact peer info,4 bytes for ipv4, 2 bytes for port
    * @param compactPeerInfo
    */
-  static fromCompact(compactPeerInfo: Uint8Array) {
+  static fromCompact(compactPeerInfo: Uint8Array): Peer {
     const { port, addr } = extractCompactAddr(compactPeerInfo)
     return new Peer(port, addr)
   }
@@ -47,11 +47,11 @@ export default class Peer {
     this.#addrType = this.parseAddrType(addr)
   }
 
-  get addr() {
+  get addr(): string {
     return this.#addr
   }
 
-  get addrType() {
+  get addrType(): string {
     return this.#addrType
   }
 
@@ -60,7 +60,7 @@ export default class Peer {
     this.#port = port
   }
 
-  get port() {
+  get port(): number {
     return this.#port
   }
 
@@ -69,11 +69,11 @@ export default class Peer {
     this.addr = addr
   }
 
-  toString() {
+  toString(): string {
     return `{port: ${this.port}, addr: ${this.addr}}`
   }
 
-  toCompact() {
+  toCompact(): Uint8Array {
     return packageCompactAddr(this.#addr, this.port)
   }
 }

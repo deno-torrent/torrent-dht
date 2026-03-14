@@ -20,15 +20,15 @@ export default class Node extends Peer {
     this.#activedAt = Date.now()
   }
 
-  get activedAt() {
+  get activedAt(): number {
     return this.#activedAt
   }
 
-  isActive() {
+  isActive(): boolean {
     return Date.now() - this.#activedAt < this.ACTIVE_RANGE
   }
 
-  get id() {
+  get id(): Id {
     return this.#id
   }
 
@@ -37,15 +37,15 @@ export default class Node extends Peer {
     this.updateActivedAt()
   }
 
-  override toString() {
+  override toString(): string {
     return `{id: ${this.#id.toString()}, port: ${this.port}, addr: ${this.addr}}`
   }
 
-  override toCompact() {
+  override toCompact(): Uint8Array {
     return packageCompactNode(this.#id, this.addr, this.port)
   }
 
-  static override fromCompact(bytes: Uint8Array) {
+  static override fromCompact(bytes: Uint8Array): Node {
     const { id, port, addr } = extractCompactNode(bytes)
 
     return new Node(id, port, addr)

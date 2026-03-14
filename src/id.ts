@@ -23,18 +23,18 @@ export default class Id {
     return !!(id && id.length === Id.BYTES_LENGTH)
   }
 
-  static fromUnit8Array(bytes: Uint8Array) {
+  static fromUnit8Array(bytes: Uint8Array): Id {
     return new Id(BitArray.fromUnit8Array(bytes))
   }
 
-  static random() {
+  static random(): Id {
     return Id.fromUnit8Array(randomSha1())
   }
 
   /**
    * get the value of the id
    */
-  get bits() {
+  get bits(): BitArray {
     return this.#value
   }
 
@@ -50,15 +50,15 @@ export default class Id {
   /**
    * hex string
    */
-  toString() {
+  toString(): string {
     return BytesUtil.bytes2HexStr(this.#value.bytes)
   }
 
-  toIntSting() {
+  toIntSting(): string {
     return this.#value.toBigInt().toString()
   }
 
-  toBinaryString() {
+  toBinaryString(): string {
     return this.#value.toString()
   }
 

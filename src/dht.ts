@@ -63,7 +63,7 @@ export default class DHT {
    * @param bootstrapNodes the bootstrap nodes
    * @returns
    */
-  static async listen(port: number, bootstrapNodes: { addr: string; port: number }[] = DHT.#DEFAULT_BOOTSTRAP_NODES) {
+  static async listen(port: number, bootstrapNodes: { addr: string; port: number }[] = DHT.#DEFAULT_BOOTSTRAP_NODES): Promise<DHT> {
     const localNdoe = await LocalNode.createLocalNode(port)
 
     return new DHT(port, localNdoe, bootstrapNodes)

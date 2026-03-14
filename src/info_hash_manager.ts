@@ -9,7 +9,7 @@ export default class InfoHashManager {
   #MAX_INFO_HASH_NUM = 1024 * 1024 // the max number of infoHashes
   private constructor() {}
 
-  static get() {
+  static get(): InfoHashManager {
     return this.#INSTANCE
   }
 
@@ -18,7 +18,7 @@ export default class InfoHashManager {
    * @param infoHash hex string
    * @returns
    */
-  find(infoHash: string) {
+  find(infoHash: string): Peer[] | undefined {
     if (!this.#infoHashes.has(infoHash)) {
       logger.error(`the infoHash ${infoHash} does not exist`)
       return undefined
@@ -27,7 +27,7 @@ export default class InfoHashManager {
     return Array.from(this.#infoHashes.get(infoHash)!)
   }
 
-  findToken(infoHash: string) {
+  findToken(infoHash: string): string | undefined {
     return this.#tokenMap.get(infoHash)
   }
 
