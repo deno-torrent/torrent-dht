@@ -9,43 +9,18 @@ import logger from '~/src/util/log.ts'
  * Kademlia 路由表
  *
  * 维护 160 个 K-桶（K-Bucket），每个桶覆盖 ID 空间的一个子范围。
- * 采用单例模式，通过 `RoutingTable.init()` 初始化，`RoutingTable.get()` 获取实例。
+ * 每个 DHT 实例持有独立的路由表，避免不同节点之间共享状态。
  */
 export default class RoutingTable {
-  static #INSTANCE: RoutingTable
   /** 每个 K-桶的最大节点容量 */
   static BUCKET_CAPACITY = 8
   #localNode: LocalNode
   #buckets: Bucket[] = []
 
-  /**
-   * 获取路由表单例实例
-   *
-   * @throws 若尚未通过 `init()` 初始化，则抛出错误
-   */
-  static get(): RoutingTable {
-    if (!RoutingTable.#INSTANCE) {
-      throw new Error('RoutingTable has not been initialized')
-    }
-    return RoutingTable.#INSTANCE
-  }
-
-  private constructor(localNode: LocalNode) {
+  /** Create an isolated routing table for one local DHT node. */
+  constructor(localNode: LocalNode) {
     this.#localNode = localNode
     this.initBuckets()
-  }
-
-  /**
-   * 初始化路由表单例（只能调用一次）
-   *
-   * @param localNode 本地节点
-   * @throws 若已经初始化过，则抛出错误
-   */
-  static init(localNode: LocalNode): void {
-    if (RoutingTable.#INSTANCE) {
-      throw new Error('RoutingTable has been initialized')
-    }
-    RoutingTable.#INSTANCE = new RoutingTable(localNode)
   }
 
   /** 本地节点 */

@@ -6,12 +6,12 @@
  */
 import { assertEquals } from '@std/assert'
 import ErrorHandler from '../src/krpc/handler/error_handler.ts'
-import TransactionManager from '../src/krpc/transaction_manager.ts'
+import TransactionManager, { Request } from '../src/krpc/transaction_manager.ts'
 import { MessageType, QueryType } from '../src/message_factory.ts'
 import { MockSender } from './fixtures.ts'
 
-const handler = new ErrorHandler()
-const mgr = TransactionManager.get()
+const mgr = new TransactionManager<Request>()
+const handler = new ErrorHandler(mgr)
 
 const REMOTE_ADDR = '6.6.6.6'
 const REMOTE_PORT = 9999

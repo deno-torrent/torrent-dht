@@ -8,7 +8,6 @@ type StoredPeer = {
 
 /** In-memory association between info hashes, peers, and announce tokens. */
 export default class InfoHashManager {
-  static #INSTANCE = new InfoHashManager()
   /** Maximum number of peers retained for one info hash. */
   static readonly MAX_PEERS_PER_INFO_HASH = 100
   /** Maximum number of info hashes retained process-wide. */
@@ -19,12 +18,8 @@ export default class InfoHashManager {
   #infoHashes: Map<string, Map<string, StoredPeer>> = new Map()
   #tokenMap: Map<string, Uint8Array> = new Map()
   #lastFullPruneAt = 0
-  private constructor() {}
-
-  /** Return the process-wide manager instance. */
-  static get(): InfoHashManager {
-    return this.#INSTANCE
-  }
+  /** Create an isolated peer and token store. */
+  constructor() {}
 
   /**
    * get all peers of the infoHash

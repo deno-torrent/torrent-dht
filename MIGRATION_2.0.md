@@ -54,6 +54,25 @@ const token = new TextEncoder().encode(previousStringToken)
 
 Decoded tokens may contain arbitrary non-UTF-8 bytes. Token inputs and stored tokens use copy ownership.
 
+## Instance-owned state
+
+`RoutingTable`, `InfoHashManager`, `TransactionManager`, and `TokenManager` are no longer process-wide singletons. Every
+`DHT` owns independent routing, peer, transaction, and announce-token state. Replace singleton access with the instance
+properties:
+
+```ts
+// 1.x
+RoutingTable.get().nodeCount
+InfoHashManager.get().find(infoHash)
+
+// 2.0
+dht.routingTable.nodeCount
+dht.infoHashManager.find(infoHash)
+```
+
+Direct consumers construct manager classes with `new`. KRPC response factory methods now require the responding local
+node ID explicitly, for example `MessageFactory.responsePing(tid, localNodeId)`.
+
 ## Runtime and permissions
 
 Version 2 supports the current stable Deno 2.x line. Toolkit 2.0 obtains MAC addresses through

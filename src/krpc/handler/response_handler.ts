@@ -12,6 +12,12 @@ import logger from '~/src/util/log.ts'
 import { COMPAT_ADDR_V4_LEN, COMPAT_NODE_LEN } from '~/src/util/net.ts'
 
 export default class ResponseHandler implements MessageHandler {
+  constructor(
+    private readonly routingTable: RoutingTable,
+    private readonly infoHashManager: InfoHashManager,
+    private readonly transactionManager: TransactionManager<Request>,
+  ) {}
+
   // tell the dispatcher this handler only handles response messages
   getHandleMessageType(): MessageType {
     return MessageType.RESPONSE
@@ -21,13 +27,13 @@ export default class ResponseHandler implements MessageHandler {
     const { t: tid, r: data, q: type } = response
 
     // check tid is valid
-    if (!TransactionManager.get().isValid(tid)) {
+    if (!this.transactionManager.isValid(tid)) {
       logger.warn(`[${tid}] received an invalid tid, drop the message from ${addr}:${port}`)
       return
     }
 
     // get the request message from transaction; if not found, drop — the message was not requested by this node
-    const request = TransactionManager.get().getData(tid)
+    const request = this.transactionManager.getData(tid)
     if (!request) {
       logger.warn(
         `[${tid}] received an unsolicited response, drop the message from ${addr}:${port}`,
@@ -50,7 +56,7 @@ export default class ResponseHandler implements MessageHandler {
     }
 
     // finish the transaction only after the response source and base shape are verified
-    TransactionManager.get().finish(response.t)
+    this.transactionManager.finish(response.t)
 
     const respNode = new Node(Id.fromUnit8Array(responseNodeId), port, addr)
 
@@ -81,7 +87,7 @@ export default class ResponseHandler implements MessageHandler {
     logger.info(`[<======RESPONSE-PING-${tid}] received from ${respNode.addr}:${respNode.port}`)
 
     // add the node into the routing table
-    if (!RoutingTable.get().add(respNode)) {
+    if (!this.routingTable.add(respNode)) {
       logger.error(`[${tid}] add node ${respNode} to routing table failed`)
     }
   }
@@ -110,13 +116,13 @@ export default class ResponseHandler implements MessageHandler {
 
     for (const nodeBytes of nodesBytesList) {
       const node = Node.fromCompact(nodeBytes)
-      if (!RoutingTable.get().add(node)) {
+      if (!this.routingTable.add(node)) {
         logger.error(`[${tid}] insert node ${node} to routing table failed`)
       }
     }
 
     // update the response node
-    if (!RoutingTable.get().add(respNode)) {
+    if (!this.routingTable.add(respNode)) {
       logger.error(`[${tid}] add node ${respNode} to routing table failed`)
     }
   }
@@ -185,7 +191,7 @@ export default class ResponseHandler implements MessageHandler {
       }
 
       // store the peers associated with the token and info hash
-      InfoHashManager.get().addList(BytesUtil.bytes2HexStr(infoHash), peers, token)
+      this.infoHashManager.addList(BytesUtil.bytes2HexStr(infoHash), peers, token)
     } else if (nodesBytes) {
       logger.info(
         `[${tid}] received ${nodesBytes.length / COMPAT_NODE_LEN} nodes for info hash: ${
@@ -209,7 +215,7 @@ export default class ResponseHandler implements MessageHandler {
     }
 
     // update the response node
-    if (!RoutingTable.get().add(respNode)) {
+    if (!this.routingTable.add(respNode)) {
       logger.error(`[${tid}] add node ${respNode} to routing table failed`)
     }
   }
@@ -218,7 +224,7 @@ export default class ResponseHandler implements MessageHandler {
     logger.info(`[<======RESPONSE-ANNOUNCE_PEER-${tid}] received from ${respNode.addr}:${respNode.port}`)
 
     // update the response node
-    if (!RoutingTable.get().add(respNode)) {
+    if (!this.routingTable.add(respNode)) {
       logger.error(`[${tid}] add node ${respNode} to routing table failed`)
     }
   }

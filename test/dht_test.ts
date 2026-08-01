@@ -9,7 +9,6 @@
  */
 import { assertEquals } from '@std/assert'
 import DHT from '../src/dht.ts'
-import RoutingTable from '../src/routing_table.ts'
 import { sha1 } from '../src/util/hash.ts'
 
 const TEST_PORT = 59999
@@ -43,7 +42,7 @@ Deno.test({
   sanitizeResources: false,
   sanitizeOps: false,
   fn() {
-    const rt = RoutingTable.get()
+    const rt = dht!.routingTable
     assertEquals(rt.localNode !== undefined, true)
     assertEquals(rt.localNode.port, TEST_PORT)
   },
@@ -55,7 +54,7 @@ Deno.test({
   sanitizeResources: false,
   sanitizeOps: false,
   fn() {
-    assertEquals(RoutingTable.get().buckets.length, 160)
+    assertEquals(dht!.routingTable.buckets.length, 160)
   },
 })
 

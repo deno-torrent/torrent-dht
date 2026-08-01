@@ -2,11 +2,11 @@
  * TransactionManager（事务管理器）测试
  */
 import { assertEquals, assertNotEquals, assertThrows } from '@std/assert'
-import TransactionManager from '../src/krpc/transaction_manager.ts'
+import TransactionManager, { Request } from '../src/krpc/transaction_manager.ts'
 import { QueryType } from '../src/message_factory.ts'
 
 // 注意：TransactionManager 是单例，使用全局共享实例进行测试
-const mgr = TransactionManager.get()
+const mgr = new TransactionManager<Request>()
 
 // ─── create / isValid / finish ────────────────────────────────────────────────
 

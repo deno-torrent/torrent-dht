@@ -13,7 +13,6 @@ export type Request = {
  * @description handle krpc transaction
  */
 export default class TransactionManager<T> {
-  static #INSTANCE = new TransactionManager<Request>()
   #EXPIRED_TIME = 1000 * 60 // UDP 请求超过 1 分钟后视为失效
   #CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
   #ID_COUNT_MAX = this.#CHARS.length * this.#CHARS.length // 最大并发事务数 62×62 = 3844（修复：原用 ^ 位异或）
@@ -32,13 +31,9 @@ export default class TransactionManager<T> {
    * create a transaction manager
    * @param expiredTime the expired time of a transaction
    */
-  private constructor(expiredTime?: number) {
+  constructor(expiredTime?: number) {
     this.#expiredTime = expiredTime || this.#EXPIRED_TIME
     this.initIdPool()
-  }
-
-  static get() {
-    return TransactionManager.#INSTANCE
   }
 
   /**

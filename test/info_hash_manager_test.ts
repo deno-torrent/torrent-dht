@@ -5,7 +5,7 @@ import { assertEquals } from '@std/assert'
 import InfoHashManager from '../src/info_hash_manager.ts'
 import Peer from '../src/peer.ts'
 
-const mgr = InfoHashManager.get()
+const mgr = new InfoHashManager()
 const tokenBytes = (value: string): Uint8Array => new TextEncoder().encode(value)
 
 // ─── add / find ───────────────────────────────────────────────────────────────

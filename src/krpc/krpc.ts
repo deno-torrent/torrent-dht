@@ -1,9 +1,12 @@
 import Id from '~/src/id.ts'
+import InfoHashManager from '~/src/info_hash_manager.ts'
 import ErrorResponseHandler from '~/src/krpc/handler/error_handler.ts'
 import RequestHandler from '~/src/krpc/handler/request_handler.ts'
 import ResponseHandler from '~/src/krpc/handler/response_handler.ts'
 import Sender from '~/src/krpc/sender.ts'
 import TransactionManager from '~/src/krpc/transaction_manager.ts'
+import type { Request } from '~/src/krpc/transaction_manager.ts'
+import TokenManager from '~/src/krpc/token_manager.ts'
 import MessageFactory, { Message, MessageType, QueryType } from '~/src/message_factory.ts'
 import Node from '~/src/node.ts'
 import RoutingTable from '~/src/routing_table.ts'
@@ -26,14 +29,21 @@ export class KRPC implements Sender {
   #port: number
   #udp: Deno.DatagramConn
   #closed = false
-  #messageHandlers: Map<MessageType, MessageHandler> = new Map([
-    [MessageType.RESPONSE, new ResponseHandler()],
-    [MessageType.QUERY, new RequestHandler()],
-    [MessageType.ERROR, new ErrorResponseHandler()],
-  ])
+  #messageHandlers: Map<MessageType, MessageHandler>
 
-  private constructor(port: number) {
+  private constructor(
+    port: number,
+    private readonly routingTable: RoutingTable,
+    private readonly transactionManager: TransactionManager<Request>,
+    infoHashManager: InfoHashManager,
+    tokenManager: TokenManager,
+  ) {
     this.#port = port
+    this.#messageHandlers = new Map<MessageType, MessageHandler>([
+      [MessageType.RESPONSE, new ResponseHandler(routingTable, infoHashManager, transactionManager)],
+      [MessageType.QUERY, new RequestHandler(routingTable, infoHashManager, tokenManager)],
+      [MessageType.ERROR, new ErrorResponseHandler(transactionManager)],
+    ])
 
     // initilize the a udp listener and sender
     this.#udp = Deno.listenDatagram({
@@ -50,9 +60,15 @@ export class KRPC implements Sender {
    * @param port
    * @returns
    */
-  static create(port: number) {
+  static create(
+    port: number,
+    routingTable: RoutingTable,
+    infoHashManager: InfoHashManager,
+    transactionManager: TransactionManager<Request>,
+    tokenManager: TokenManager,
+  ) {
     if (!NetUtil.isNetPort(port)) throw new Error('invalid port, should be in range [0, 65535], but got ' + port)
-    return new KRPC(port)
+    return new KRPC(port, routingTable, transactionManager, infoHashManager, tokenManager)
   }
 
   /**
@@ -147,13 +163,13 @@ export class KRPC implements Sender {
    */
   async sendPingRequest(targetNode: Node) {
     const address = await this.resolveAddress(targetNode.addr)
-    const tid = TransactionManager.get().create({
+    const tid = this.transactionManager.create({
       type: QueryType.PING,
       addr: address,
       port: targetNode.port,
     })
 
-    const messageFC = MessageFactory.requestPing(tid, RoutingTable.get().localNode.id)
+    const messageFC = MessageFactory.requestPing(tid, this.routingTable.localNode.id)
 
     // send the message
     await this.sendMessage(targetNode.port, address, messageFC)
@@ -172,13 +188,13 @@ export class KRPC implements Sender {
    */
   async sendFindNodeRequest(port: number, addr: string, targetId: Id) {
     const address = await this.resolveAddress(addr)
-    const tid = TransactionManager.get().create({
+    const tid = this.transactionManager.create({
       type: QueryType.FIND_NODE,
       addr: address,
       port: port,
     })
 
-    const messageFC = MessageFactory.requestFindNode(tid, RoutingTable.get().localNode.id, targetId)
+    const messageFC = MessageFactory.requestFindNode(tid, this.routingTable.localNode.id, targetId)
     await this.sendMessage(port, address, messageFC)
   }
 
@@ -190,13 +206,13 @@ export class KRPC implements Sender {
    */
   async sendGetPeersRequest(targetNode: Node, infoHash: Uint8Array) {
     const address = await this.resolveAddress(targetNode.addr)
-    const tid = TransactionManager.get().create({
+    const tid = this.transactionManager.create({
       type: QueryType.GET_PEERS,
       infoHash: infoHash,
       addr: address,
       port: targetNode.port,
     })
-    const messageFC = MessageFactory.requestGetPeers(tid, RoutingTable.get().localNode.id, infoHash)
+    const messageFC = MessageFactory.requestGetPeers(tid, this.routingTable.localNode.id, infoHash)
     await this.sendMessage(targetNode.port, address, messageFC)
   }
 
@@ -212,7 +228,7 @@ export class KRPC implements Sender {
    */
   async sendAnnouncePeerRequest(targetNode: Node, infoHash: Uint8Array, token: Uint8Array) {
     const address = await this.resolveAddress(targetNode.addr)
-    const tid = TransactionManager.get().create({
+    const tid = this.transactionManager.create({
       type: QueryType.ANNOUNCE_PEER,
       infoHash: infoHash,
       addr: address,
@@ -220,7 +236,7 @@ export class KRPC implements Sender {
     })
     const messageFC = MessageFactory.requestAnnouncePeer(
       tid,
-      RoutingTable.get().localNode.id,
+      this.routingTable.localNode.id,
       infoHash,
       this.#port,
       token,
@@ -234,12 +250,12 @@ export class KRPC implements Sender {
    */
   async sendPingBootrapNodesRequest({ addr, port }: { addr: string; port: number }) {
     const address = await this.resolveAddress(addr)
-    const tid = TransactionManager.get().create({
+    const tid = this.transactionManager.create({
       type: QueryType.PING,
       addr: address,
       port: port,
     })
-    const messageFC = MessageFactory.requestPing(tid, RoutingTable.get().localNode.id)
+    const messageFC = MessageFactory.requestPing(tid, this.routingTable.localNode.id)
     await this.sendMessage(port, address, messageFC)
   }
 

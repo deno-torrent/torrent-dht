@@ -1,5 +1,8 @@
 import Id from '~/src/id.ts'
+import InfoHashManager from '~/src/info_hash_manager.ts'
 import { KRPC } from '~/src/krpc/krpc.ts'
+import TransactionManager, { Request } from '~/src/krpc/transaction_manager.ts'
+import TokenManager from '~/src/krpc/token_manager.ts'
 import LocalNode from '~/src/local_node.ts'
 import RoutingTable from '~/src/routing_table.ts'
 import logger from '~/src/util/log.ts'
@@ -29,6 +32,8 @@ export default class DHT {
   ]
   #bootstrapNodes: { addr: string; port: number }[] // the bootstrap nodes
   #krpc: KRPC // the krpc protocol
+  readonly #routingTable: RoutingTable
+  readonly #infoHashManager: InfoHashManager
 
   private constructor(port: number, localNode: LocalNode, bootstrapNodes: { addr: string; port: number }[]) {
     // check the port
@@ -41,9 +46,11 @@ export default class DHT {
       throw new Error('you should provide at least one bootstrap node, or use the default bootstrap nodes')
     }
 
-    // initilize the routing table
-    logger.info('initilize the routing table')
-    RoutingTable.init(localNode)
+    logger.info('initialize isolated DHT state')
+    this.#routingTable = new RoutingTable(localNode)
+    this.#infoHashManager = new InfoHashManager()
+    const transactionManager = new TransactionManager<Request>()
+    const tokenManager = new TokenManager()
 
     // initilize the bootstrap nodes
     logger.info('initilize the bootstrap nodes')
@@ -51,10 +58,26 @@ export default class DHT {
 
     // initilize the krpc protocol
     logger.info('initilize the krpc protocol')
-    this.#krpc = KRPC.create(port)
+    this.#krpc = KRPC.create(
+      port,
+      this.#routingTable,
+      this.#infoHashManager,
+      transactionManager,
+      tokenManager,
+    )
 
     // ping the bootstrap nodes
     void this.pingBootstrapNodes().catch((error) => logger.error(`bootstrap failed: ${error}`))
+  }
+
+  /** Routing state owned exclusively by this DHT instance. */
+  get routingTable(): RoutingTable {
+    return this.#routingTable
+  }
+
+  /** Peer associations discovered by this DHT instance. */
+  get infoHashManager(): InfoHashManager {
+    return this.#infoHashManager
   }
 
   /**
@@ -97,7 +120,7 @@ export default class DHT {
   async sendFindNodeRequest(): Promise<void> {
     logger.info(`start sendFindNodeRequest`)
     // get node from bucket
-    for (const bucket of RoutingTable.get().buckets || []) {
+    for (const bucket of this.#routingTable.buckets) {
       if (bucket.isEmpty()) {
         continue
       }
@@ -114,16 +137,16 @@ export default class DHT {
    */
   async sendGetPeersRequest(infoHash: Uint8Array): Promise<void> {
     logger.info(`start sendGetPeersRequest`)
-    if (RoutingTable.get().nodeCount === 0) {
+    if (this.#routingTable.nodeCount === 0) {
       logger.info(`no nodes in the routing table, skip sendGetPeersRequest`)
       return
     }
-    const closestNodes = RoutingTable.get().findClosestNodes(Id.fromUnit8Array(infoHash))
+    const closestNodes = this.#routingTable.findClosestNodes(Id.fromUnit8Array(infoHash))
 
     if (closestNodes.length === 0) {
       logger.info(`[no closest nodes found], sendGetPeersRequest to a random node`)
       // 随机获取一个node
-      const node = RoutingTable.get().getRandomNode()
+      const node = this.#routingTable.getRandomNode()
       if (node) {
         await this.#krpc.sendGetPeersRequest(node, infoHash)
         return

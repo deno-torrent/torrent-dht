@@ -17,7 +17,6 @@
  */
 import { assert, assertGreater, assertLessOrEqual } from '@std/assert'
 import DHT from '../src/dht.ts'
-import RoutingTable from '../src/routing_table.ts'
 import { sha1 } from '../src/util/hash.ts'
 
 // 与 dht_test.ts 的 59999 端口隔离
@@ -58,9 +57,9 @@ Deno.test({
   sanitizeResources: false,
   sanitizeOps: false,
   async fn() {
-    const joined = await waitFor(() => RoutingTable.get().nodeCount >= 1, 30_000)
+    const joined = await waitFor(() => dht!.routingTable.nodeCount >= 1, 30_000)
 
-    const nodeCount = RoutingTable.get().nodeCount
+    const nodeCount = dht!.routingTable.nodeCount
     console.log(`\n[网络测试] Bootstrap 完成，路由表节点数：${nodeCount}`)
 
     assert(joined, `路由表在 30s 内仍为空，节点数：${nodeCount}，请检查网络连接`)
@@ -75,15 +74,15 @@ Deno.test({
   sanitizeResources: false,
   sanitizeOps: false,
   async fn() {
-    const before = RoutingTable.get().nodeCount
+    const before = dht!.routingTable.nodeCount
 
     // 向路由表中所有已知节点发送 find_node
     await dht!.sendFindNodeRequest()
 
     // 等待最多 15s 让响应回来
-    await waitFor(() => RoutingTable.get().nodeCount > before, 15_000)
+    await waitFor(() => dht!.routingTable.nodeCount > before, 15_000)
 
-    const after = RoutingTable.get().nodeCount
+    const after = dht!.routingTable.nodeCount
     console.log(`[网络测试] find_node 前：${before}，后：${after}`)
 
     // 路由表已满（桶容量 = 8，共 160 桶，最多 1280）时节点数不再增长属正常
@@ -109,7 +108,7 @@ Deno.test({
     // 等待 5s，让 DHT 有机会收到 nodes 响应并递归扩展
     await new Promise((r) => setTimeout(r, 5_000))
 
-    const nodeCount = RoutingTable.get().nodeCount
+    const nodeCount = dht!.routingTable.nodeCount
     console.log(`[网络测试] get_peers 完成，路由表节点数：${nodeCount}`)
 
     // 核心保证：整个流程无异常，路由表仍然健康
@@ -125,7 +124,7 @@ Deno.test({
   sanitizeResources: false,
   sanitizeOps: false,
   fn() {
-    const count = RoutingTable.get().nodeCount
+    const count = dht!.routingTable.nodeCount
     const MAX_NODES = 160 * 8 // 160 桶 × 每桶 8 节点
 
     console.log(`[网络测试] 最终路由表节点数：${count}（上限 ${MAX_NODES}）`)

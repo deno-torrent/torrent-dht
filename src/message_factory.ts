@@ -3,7 +3,6 @@ import { concat } from '@std/bytes'
 import Id from '~/src/id.ts'
 import Node from '~/src/node.ts'
 import Peer from '~/src/peer.ts'
-import RoutingTable from '~/src/routing_table.ts'
 import logger from '~/src/util/log.ts'
 
 // IPv4 UDP payloads cannot exceed 65,507 bytes. KRPC messages only need a few
@@ -392,11 +391,11 @@ export default class MessageFactory {
    *
    * @param tid 事务 ID
    */
-  static responsePing(tid: string): MessageFactory {
+  static responsePing(tid: string, nodeId: Id): MessageFactory {
     return new MessageFactory({
       t: tid,
       y: MessageType.RESPONSE,
-      r: { id: RoutingTable.get().localNode.id.bits.bytes },
+      r: { id: nodeId.bits.bytes },
     })
   }
 
@@ -406,14 +405,14 @@ export default class MessageFactory {
    * @param tid   事务 ID
    * @param nodes 最近节点列表（将被序列化为紧凑格式）
    */
-  static responseFindNode(tid: string, nodes: Node[]): MessageFactory {
+  static responseFindNode(tid: string, nodeId: Id, nodes: Node[]): MessageFactory {
     const compactNodeList = nodes.map((node) => node.toCompact())
 
     return new MessageFactory({
       t: tid,
       y: MessageType.RESPONSE,
       r: {
-        id: RoutingTable.get().localNode.id.bits.bytes,
+        id: nodeId.bits.bytes,
         // @std/bytes v1.x：concat 接受 Uint8Array[] 数组而非展开参数
         nodes: concat(compactNodeList),
       },
@@ -431,7 +430,13 @@ export default class MessageFactory {
    * @param nodes 最近节点列表（可选）
    * @param token 令牌（可选）
    */
-  static responseGetPeers(tid: string, peers?: Peer[], nodes?: Node[], token?: Uint8Array): MessageFactory {
+  static responseGetPeers(
+    tid: string,
+    nodeId: Id,
+    peers?: Peer[],
+    nodes?: Node[],
+    token?: Uint8Array,
+  ): MessageFactory {
     const hasPeers = peers && peers.length > 0
     const hasNodes = nodes && nodes.length > 0
 
@@ -446,7 +451,7 @@ export default class MessageFactory {
         t: tid,
         y: MessageType.RESPONSE,
         r: {
-          id: RoutingTable.get().localNode.id.bits.bytes,
+          id: nodeId.bits.bytes,
           token: token?.slice(),
           nodes: concat(compactNodeList),
         },
@@ -456,7 +461,7 @@ export default class MessageFactory {
         t: tid,
         y: MessageType.RESPONSE,
         r: {
-          id: RoutingTable.get().localNode.id.bits.bytes,
+          id: nodeId.bits.bytes,
           token: token?.slice(),
           values: peers!.map((peer) => peer.toCompact()),
         },
@@ -469,11 +474,11 @@ export default class MessageFactory {
    *
    * @param tid 事务 ID
    */
-  static responseAnnouncePeer(tid: string): MessageFactory {
+  static responseAnnouncePeer(tid: string, nodeId: Id): MessageFactory {
     return new MessageFactory({
       t: tid,
       y: MessageType.RESPONSE,
-      r: { id: RoutingTable.get().localNode.id.bits.bytes },
+      r: { id: nodeId.bits.bytes },
     })
   }
 

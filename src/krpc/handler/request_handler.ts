@@ -11,6 +11,12 @@ import logger from '~/src/util/log.ts'
 import { BytesUtil, NetUtil } from '@deno-torrent/toolkit'
 
 export default class RequestHandler implements MessageHandler {
+  constructor(
+    private readonly routingTable: RoutingTable,
+    private readonly infoHashManager: InfoHashManager,
+    private readonly tokenManager: TokenManager,
+  ) {}
+
   getHandleMessageType(): MessageType {
     return MessageType.QUERY
   }
@@ -57,7 +63,7 @@ export default class RequestHandler implements MessageHandler {
     logger.info(`[<======QUERY-PING-${reqMsg.q}] received from ${reqNode.addr}:${reqNode.port}`)
 
     // return local node id
-    const response = MessageFactory.responsePing(tid)
+    const response = MessageFactory.responsePing(tid, this.routingTable.localNode.id)
 
     await sender.sendMessage(reqNode.port, reqNode.addr, response)
   }
@@ -90,7 +96,7 @@ export default class RequestHandler implements MessageHandler {
 
     const targetId = Id.fromUnit8Array(targetIdBytes)
 
-    const closestNodes = RoutingTable.get().findClosestNodes(targetId, 8)
+    const closestNodes = this.routingTable.findClosestNodes(targetId, 8)
 
     if (!closestNodes || closestNodes.length === 0) {
       logger.error(`[${tid}]: not found closest nodes for target id: ${targetId}`)
@@ -105,7 +111,11 @@ export default class RequestHandler implements MessageHandler {
     }
 
     // response to request node
-    await sender.sendMessage(reqNode.port, reqNode.addr, MessageFactory.responseFindNode(tid, closestNodes))
+    await sender.sendMessage(
+      reqNode.port,
+      reqNode.addr,
+      MessageFactory.responseFindNode(tid, this.routingTable.localNode.id, closestNodes),
+    )
   }
 
   async handleGetPeersQueryRequest(reqMsg: Message, reqNode: Node, tid: string, sender: Sender) {
@@ -123,21 +133,21 @@ export default class RequestHandler implements MessageHandler {
     }
 
     const infoHashHex = BytesUtil.bytes2HexStr(infoHash)
-    const peers = InfoHashManager.get().find(infoHashHex)
-    const token = TokenManager.get().issue(reqNode.addr)
+    const peers = this.infoHashManager.find(infoHashHex)
+    const token = this.tokenManager.issue(reqNode.addr)
 
     let response: MessageFactory
     if (peers && peers.length > 0) {
       logger.info(`[${tid}]: find ${peers.length} peers for info hash: ${infoHashHex}}`)
       // return peers
-      response = MessageFactory.responseGetPeers(tid, peers, undefined, token)
+      response = MessageFactory.responseGetPeers(tid, this.routingTable.localNode.id, peers, undefined, token)
     } else {
-      const closestNodes = RoutingTable.get().findClosestNodes(Id.fromUnit8Array(infoHash), 8)
+      const closestNodes = this.routingTable.findClosestNodes(Id.fromUnit8Array(infoHash), 8)
 
       if (closestNodes && closestNodes.length > 0) {
         logger.info(`[${tid}]: find ${closestNodes.length} nodes for info hash: ${infoHashHex}}`)
         // return closest nodes
-        response = MessageFactory.responseGetPeers(tid, undefined, closestNodes, token)
+        response = MessageFactory.responseGetPeers(tid, this.routingTable.localNode.id, undefined, closestNodes, token)
       } else {
         logger.error(`[${tid}]: can not find peers or nodes for info hash: ${infoHashHex}}`)
         response = MessageFactory.responseError(
@@ -205,7 +215,7 @@ export default class RequestHandler implements MessageHandler {
     // 0 or 1, 1 means use the sender port, ignore the port in the request. 0 means use the port in the request as the download port
     // if the node is behind a NAT, the sender port is the public port, the download port is the private port, at this time, the implied_port should be 1
     // BEP 5 tokens authorize the requester's IP, not a globally shared info hash.
-    if (!TokenManager.get().validate(token, reqNode.addr)) {
+    if (!this.tokenManager.validate(token, reqNode.addr)) {
       logger.error(`[${tid}]: invalid token: ${token}`)
 
       await sender.sendMessage(
@@ -221,9 +231,13 @@ export default class RequestHandler implements MessageHandler {
     const downloadPort = impliedPort === 1 ? reqNode.port : port
 
     // store the peer
-    InfoHashManager.get().addValidatedPeer(infoHashHex, new Peer(downloadPort, reqNode.addr))
+    this.infoHashManager.addValidatedPeer(infoHashHex, new Peer(downloadPort, reqNode.addr))
 
     // response to the request node
-    await sender.sendMessage(reqNode.port, reqNode.addr, MessageFactory.responseAnnouncePeer(tid))
+    await sender.sendMessage(
+      reqNode.port,
+      reqNode.addr,
+      MessageFactory.responseAnnouncePeer(tid, this.routingTable.localNode.id),
+    )
   }
 }

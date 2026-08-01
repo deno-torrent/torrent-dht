@@ -7,16 +7,18 @@
 import { assertEquals } from '@std/assert'
 import { encodeHex } from '@std/encoding/hex'
 import ResponseHandler from '../src/krpc/handler/response_handler.ts'
-import TransactionManager from '../src/krpc/transaction_manager.ts'
+import TransactionManager, { Request } from '../src/krpc/transaction_manager.ts'
 import { MessageType, QueryType } from '../src/message_factory.ts'
 import RoutingTable from '../src/routing_table.ts'
 import InfoHashManager from '../src/info_hash_manager.ts'
 import { makeInfoHash, makeLocalNode, makeNode, MockSender } from './fixtures.ts'
 
 const localNode = makeLocalNode('response-handler-test', 16001)
-RoutingTable.init(localNode)
+const routingTable = new RoutingTable(localNode)
+const infoHashManager = new InfoHashManager()
 
-const mgr = TransactionManager.get()
+const mgr = new TransactionManager<Request>()
+const responseHandler = new ResponseHandler(routingTable, infoHashManager, mgr)
 const tokenBytes = (value: string): Uint8Array => new TextEncoder().encode(value)
 
 const REMOTE_ADDR = '5.5.5.5'
@@ -27,7 +29,7 @@ const RESP_NODE_ID = makeInfoHash('response-node')
 // ─── TID 校验 ─────────────────────────────────────────────────────────────────
 
 Deno.test('ResponseHandler - TID 不存在时静默丢弃消息', async () => {
-  const handler = new ResponseHandler()
+  const handler = responseHandler
   const sender = new MockSender()
   await handler.handle(
     { t: 'ZZ', y: MessageType.RESPONSE, r: { id: RESP_NODE_ID } },
@@ -40,7 +42,7 @@ Deno.test('ResponseHandler - TID 不存在时静默丢弃消息', async () => {
 })
 
 Deno.test('ResponseHandler - 响应中 node ID 缺失时静默丢弃', async () => {
-  const handler = new ResponseHandler()
+  const handler = responseHandler
   const tid = mgr.create({ type: QueryType.PING, addr: REMOTE_ADDR, port: REMOTE_PORT })
   const sender = new MockSender()
   await handler.handle(
@@ -56,9 +58,9 @@ Deno.test('ResponseHandler - 响应中 node ID 缺失时静默丢弃', async () 
 // ─── ping 响应 ────────────────────────────────────────────────────────────────
 
 Deno.test('ResponseHandler - ping 响应将节点加入路由表', async () => {
-  const handler = new ResponseHandler()
+  const handler = responseHandler
   const tid = mgr.create({ type: QueryType.PING, addr: REMOTE_ADDR, port: REMOTE_PORT })
-  const beforeCount = RoutingTable.get().nodeCount
+  const beforeCount = routingTable.nodeCount
 
   const sender = new MockSender()
   await handler.handle(
@@ -67,15 +69,15 @@ Deno.test('ResponseHandler - ping 响应将节点加入路由表', async () => {
     REMOTE_PORT,
     sender,
   )
-  assertEquals(RoutingTable.get().nodeCount, beforeCount + 1)
+  assertEquals(routingTable.nodeCount, beforeCount + 1)
   // 事务应已完成
   assertEquals(mgr.isValid(tid), false)
 })
 
 Deno.test('ResponseHandler - 来源地址不匹配时保留事务并丢弃响应', async () => {
-  const handler = new ResponseHandler()
+  const handler = responseHandler
   const tid = mgr.create({ type: QueryType.PING, addr: REMOTE_ADDR, port: REMOTE_PORT })
-  const beforeCount = RoutingTable.get().nodeCount
+  const beforeCount = routingTable.nodeCount
 
   await handler.handle(
     { t: tid, y: MessageType.RESPONSE, r: { id: makeInfoHash('spoofed-response-node') } },
@@ -85,12 +87,12 @@ Deno.test('ResponseHandler - 来源地址不匹配时保留事务并丢弃响应
   )
 
   assertEquals(mgr.isValid(tid), true)
-  assertEquals(RoutingTable.get().nodeCount, beforeCount)
+  assertEquals(routingTable.nodeCount, beforeCount)
   mgr.finish(tid)
 })
 
 Deno.test('ResponseHandler - 来源端口不匹配时保留事务并丢弃响应', async () => {
-  const handler = new ResponseHandler()
+  const handler = responseHandler
   const tid = mgr.create({ type: QueryType.PING, addr: REMOTE_ADDR, port: REMOTE_PORT })
 
   await handler.handle(
@@ -107,7 +109,7 @@ Deno.test('ResponseHandler - 来源端口不匹配时保留事务并丢弃响应
 // ─── find_node 响应 ───────────────────────────────────────────────────────────
 
 Deno.test('ResponseHandler - find_node 响应解析 nodes 并加入路由表', async () => {
-  const handler = new ResponseHandler()
+  const handler = responseHandler
   const tid = mgr.create({ type: QueryType.FIND_NODE, addr: REMOTE_ADDR, port: REMOTE_PORT })
 
   // 构造 2 个紧凑节点（各 26 字节）
@@ -115,7 +117,7 @@ Deno.test('ResponseHandler - find_node 响应解析 nodes 并加入路由表', a
   const n2 = makeNode('resp-fn-node-2', '12.12.12.12', 2222)
   const nodesBytes = new Uint8Array([...n1.toCompact(), ...n2.toCompact()])
 
-  const beforeCount = RoutingTable.get().nodeCount
+  const beforeCount = routingTable.nodeCount
 
   const sender = new MockSender()
   await handler.handle(
@@ -125,13 +127,13 @@ Deno.test('ResponseHandler - find_node 响应解析 nodes 并加入路由表', a
     sender,
   )
   // 解析出 2 个节点 + 响应节点本身，路由表至少增加 1 个（部分节点可能已存在）
-  assertEquals(RoutingTable.get().nodeCount > beforeCount, true)
+  assertEquals(routingTable.nodeCount > beforeCount, true)
 })
 
 Deno.test('ResponseHandler - find_node 响应 nodes 字节不是 26 的倍数时静默丢弃', async () => {
-  const handler = new ResponseHandler()
+  const handler = responseHandler
   const tid = mgr.create({ type: QueryType.FIND_NODE, addr: REMOTE_ADDR, port: REMOTE_PORT })
-  const beforeCount = RoutingTable.get().nodeCount
+  const beforeCount = routingTable.nodeCount
 
   const sender = new MockSender()
   await handler.handle(
@@ -141,13 +143,13 @@ Deno.test('ResponseHandler - find_node 响应 nodes 字节不是 26 的倍数时
     sender,
   )
   // 节点数不应增加（响应节点本身由于丢弃逻辑不被添加）
-  assertEquals(RoutingTable.get().nodeCount, beforeCount)
+  assertEquals(routingTable.nodeCount, beforeCount)
 })
 
 Deno.test('ResponseHandler - find_node 响应缺少 nodes 字段时静默丢弃', async () => {
-  const handler = new ResponseHandler()
+  const handler = responseHandler
   const tid = mgr.create({ type: QueryType.FIND_NODE, addr: REMOTE_ADDR, port: REMOTE_PORT })
-  const beforeCount = RoutingTable.get().nodeCount
+  const beforeCount = routingTable.nodeCount
 
   const sender = new MockSender()
   await handler.handle(
@@ -156,13 +158,13 @@ Deno.test('ResponseHandler - find_node 响应缺少 nodes 字段时静默丢弃'
     REMOTE_PORT,
     sender,
   )
-  assertEquals(RoutingTable.get().nodeCount, beforeCount)
+  assertEquals(routingTable.nodeCount, beforeCount)
 })
 
 // ─── get_peers 响应（含 values）────────────────────────────────────────────────
 
 Deno.test('ResponseHandler - get_peers 响应含 values 时将 peers 存入 InfoHashManager', async () => {
-  const handler = new ResponseHandler()
+  const handler = responseHandler
   const infoHash = makeInfoHash('gp-values-file')
   const infoHashHex = encodeHex(infoHash)
   const tid = mgr.create({ type: QueryType.GET_PEERS, addr: REMOTE_ADDR, port: REMOTE_PORT, infoHash })
@@ -177,14 +179,14 @@ Deno.test('ResponseHandler - get_peers 响应含 values 时将 peers 存入 Info
     REMOTE_PORT,
     sender,
   )
-  const peers = InfoHashManager.get().find(infoHashHex)
+  const peers = infoHashManager.find(infoHashHex)
   assertEquals(peers !== undefined && peers.length > 0, true)
 })
 
 // ─── get_peers 响应（含 nodes）────────────────────────────────────────────────
 
 Deno.test('ResponseHandler - get_peers 响应含 nodes 时发起二轮 get_peers 请求', async () => {
-  const handler = new ResponseHandler()
+  const handler = responseHandler
   const infoHash = makeInfoHash('gp-nodes-file')
   const tid = mgr.create({ type: QueryType.GET_PEERS, addr: REMOTE_ADDR, port: REMOTE_PORT, infoHash })
 
@@ -204,7 +206,7 @@ Deno.test('ResponseHandler - get_peers 响应含 nodes 时发起二轮 get_peers
 })
 
 Deno.test('ResponseHandler - get_peers 响应缺少 token 时静默丢弃', async () => {
-  const handler = new ResponseHandler()
+  const handler = responseHandler
   const infoHash = makeInfoHash('gp-no-token')
   // 合法 TID，但 r 中不携带 token
   const tid = mgr.create({ type: QueryType.GET_PEERS, addr: REMOTE_ADDR, port: REMOTE_PORT, infoHash })
@@ -223,11 +225,11 @@ Deno.test('ResponseHandler - get_peers 响应缺少 token 时静默丢弃', asyn
 // ─── announce_peer 响应 ───────────────────────────────────────────────────────
 
 Deno.test('ResponseHandler - announce_peer 响应将节点加入路由表', async () => {
-  const handler = new ResponseHandler()
+  const handler = responseHandler
   // 使用独立 ID，避免与 ping 测试添加的节点重复
   const uniqueId = makeInfoHash('ap-unique-resp-node')
   const tid = mgr.create({ type: QueryType.ANNOUNCE_PEER, addr: '7.7.7.7', port: 7001 })
-  const beforeCount = RoutingTable.get().nodeCount
+  const beforeCount = routingTable.nodeCount
 
   const sender = new MockSender()
   await handler.handle(
@@ -236,20 +238,20 @@ Deno.test('ResponseHandler - announce_peer 响应将节点加入路由表', asyn
     7001,
     sender,
   )
-  assertEquals(RoutingTable.get().nodeCount, beforeCount + 1)
+  assertEquals(routingTable.nodeCount, beforeCount + 1)
   assertEquals(mgr.isValid(tid), false)
 })
 
 // ─── getHandleMessageType ─────────────────────────────────────────────────────
 
 Deno.test('ResponseHandler.getHandleMessageType - 返回 RESPONSE 类型', () => {
-  assertEquals(new ResponseHandler().getHandleMessageType(), MessageType.RESPONSE)
+  assertEquals(responseHandler.getHandleMessageType(), MessageType.RESPONSE)
 })
 
 // ─── get_peers 无效 peer 字节 ─────────────────────────────────────────────────
 
 Deno.test('ResponseHandler - get_peers values 含非 6 字节元素时静默丢弃', async () => {
-  const handler = new ResponseHandler()
+  const handler = responseHandler
   const infoHash = makeInfoHash('gp-bad-peer-bytes')
   const infoHashHex = encodeHex(infoHash)
   const tid = mgr.create({ type: QueryType.GET_PEERS, addr: REMOTE_ADDR, port: REMOTE_PORT, infoHash })
@@ -267,13 +269,13 @@ Deno.test('ResponseHandler - get_peers values 含非 6 字节元素时静默丢�
     sender,
   )
   // 无效 peer 数据：InfoHashManager 不应记录任何 peer
-  assertEquals(InfoHashManager.get().find(infoHashHex), undefined)
+  assertEquals(infoHashManager.find(infoHashHex), undefined)
 })
 
 // ─── get_peers 空 values 数组 ────────────────────────────────────────────────
 
 Deno.test('ResponseHandler - get_peers 空 values 且有 token 时不存储任何 peer', async () => {
-  const handler = new ResponseHandler()
+  const handler = responseHandler
   const infoHash = makeInfoHash('gp-empty-values')
   const infoHashHex = encodeHex(infoHash)
   const tid = mgr.create({ type: QueryType.GET_PEERS, addr: REMOTE_ADDR, port: REMOTE_PORT, infoHash })
@@ -286,5 +288,5 @@ Deno.test('ResponseHandler - get_peers 空 values 且有 token 时不存储任�
     sender,
   )
   // 空 values 列表：没有 peer 可存
-  assertEquals(InfoHashManager.get().find(infoHashHex), undefined)
+  assertEquals(infoHashManager.find(infoHashHex), undefined)
 })

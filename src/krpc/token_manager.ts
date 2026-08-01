@@ -12,8 +12,6 @@ type TokenManagerOptions = {
 
 /** Issues short-lived BEP 5 announce tokens bound to the requester's IP address. */
 export default class TokenManager {
-  static #INSTANCE = new TokenManager()
-
   #currentSecret: Uint8Array
   #previousSecret?: Uint8Array
   #rotatedAt: number
@@ -31,10 +29,6 @@ export default class TokenManager {
     this.#secretFactory = options.secretFactory ?? (() => crypto.getRandomValues(new Uint8Array(SECRET_LENGTH)))
     this.#currentSecret = this.#newSecret()
     this.#rotatedAt = this.#now()
-  }
-
-  static get(): TokenManager {
-    return this.#INSTANCE
   }
 
   /** Issue a token that can only be used by the supplied IP address. */

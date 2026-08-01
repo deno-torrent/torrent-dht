@@ -16,7 +16,10 @@ import { makeInfoHash, makeLocalNode, makeNode, MockSender } from './fixtures.ts
 
 // 每个测试文件运行在独立的 Deno worker 中，单例从零开始
 const localNode = makeLocalNode('request-handler-test')
-RoutingTable.init(localNode)
+const routingTable = new RoutingTable(localNode)
+const infoHashManager = new InfoHashManager()
+const tokenManager = new TokenManager()
+const requestHandler = new RequestHandler(routingTable, infoHashManager, tokenManager)
 
 // 模拟发起查询的远端节点信息
 const REMOTE_ADDR = '2.2.2.2'
@@ -28,7 +31,7 @@ const tokenBytes = (value: string): Uint8Array => new TextEncoder().encode(value
 // ─── 无效 node ID ─────────────────────────────────────────────────────────────
 
 Deno.test('RequestHandler - node ID 字节长度不是 20 时返回 PROTOCOL 错误', async () => {
-  const handler = new RequestHandler()
+  const handler = requestHandler
   const sender = new MockSender()
   await handler.handle(
     { t: 'aa', y: MessageType.QUERY, q: QueryType.PING, a: { id: new Uint8Array(10) } },
@@ -42,7 +45,7 @@ Deno.test('RequestHandler - node ID 字节长度不是 20 时返回 PROTOCOL 错
 })
 
 Deno.test('RequestHandler - node ID 缺失时返回 PROTOCOL 错误', async () => {
-  const handler = new RequestHandler()
+  const handler = requestHandler
   const sender = new MockSender()
   await handler.handle(
     { t: 'aa', y: MessageType.QUERY, q: QueryType.PING, a: { id: undefined as unknown as Uint8Array } },
@@ -58,7 +61,7 @@ Deno.test('RequestHandler - node ID 缺失时返回 PROTOCOL 错误', async () =
 // ─── ping ─────────────────────────────────────────────────────────────────────
 
 Deno.test('RequestHandler - ping 请求返回 RESPONSE 并携带正确 TID', async () => {
-  const handler = new RequestHandler()
+  const handler = requestHandler
   const sender = new MockSender()
   await handler.handle(
     { t: 'bb', y: MessageType.QUERY, q: QueryType.PING, a: { id: REMOTE_ID } },
@@ -72,7 +75,7 @@ Deno.test('RequestHandler - ping 请求返回 RESPONSE 并携带正确 TID', asy
 })
 
 Deno.test('RequestHandler - ping 响应发送至请求方地址', async () => {
-  const handler = new RequestHandler()
+  const handler = requestHandler
   const sender = new MockSender()
   await handler.handle(
     { t: 'bc', y: MessageType.QUERY, q: QueryType.PING, a: { id: REMOTE_ID } },
@@ -87,7 +90,7 @@ Deno.test('RequestHandler - ping 响应发送至请求方地址', async () => {
 // ─── find_node ────────────────────────────────────────────────────────────────
 
 Deno.test('RequestHandler - find_node 缺少 target 字段时返回 PROTOCOL 错误', async () => {
-  const handler = new RequestHandler()
+  const handler = requestHandler
   const sender = new MockSender()
   await handler.handle(
     { t: 'cc', y: MessageType.QUERY, q: QueryType.FIND_NODE, a: { id: REMOTE_ID } },
@@ -99,7 +102,7 @@ Deno.test('RequestHandler - find_node 缺少 target 字段时返回 PROTOCOL 错
 })
 
 Deno.test('RequestHandler - find_node target 长度非 20 时返回 PROTOCOL 错误', async () => {
-  const handler = new RequestHandler()
+  const handler = requestHandler
   const sender = new MockSender()
   await handler.handle(
     { t: 'cd', y: MessageType.QUERY, q: QueryType.FIND_NODE, a: { id: REMOTE_ID, target: new Uint8Array(5) } },
@@ -113,9 +116,9 @@ Deno.test('RequestHandler - find_node target 长度非 20 时返回 PROTOCOL 错
 Deno.test('RequestHandler - find_node 路由表为空时返回 GENERIC 错误', async () => {
   // 此时路由表只有 localNode，findClosestNodes 对随机 target 可能返回空
   // 先确保路由表中没有其他节点
-  RoutingTable.get().getAllNodes().forEach((n) => RoutingTable.get().remove(n))
+  routingTable.getAllNodes().forEach((n) => routingTable.remove(n))
 
-  const handler = new RequestHandler()
+  const handler = requestHandler
   const sender = new MockSender()
   await handler.handle(
     {
@@ -133,10 +136,10 @@ Deno.test('RequestHandler - find_node 路由表为空时返回 GENERIC 错误', 
 
 Deno.test('RequestHandler - find_node 有最近节点时返回 RESPONSE', async () => {
   // 添加节点到路由表，确保 findClosestNodes 返回非空
-  RoutingTable.get().add(makeNode('fn-node-1', '3.3.3.3', 1111))
-  RoutingTable.get().add(makeNode('fn-node-2', '4.4.4.4', 2222))
+  routingTable.add(makeNode('fn-node-1', '3.3.3.3', 1111))
+  routingTable.add(makeNode('fn-node-2', '4.4.4.4', 2222))
 
-  const handler = new RequestHandler()
+  const handler = requestHandler
   const sender = new MockSender()
   await handler.handle(
     {
@@ -158,9 +161,9 @@ Deno.test('RequestHandler - get_peers 有已知 peers 时返回含 values 的 RE
   const infoHash = makeInfoHash('known-file')
   const infoHashHex = encodeHex(infoHash)
   // 预置 peer 和 token
-  InfoHashManager.get().add(infoHashHex, new Peer(9999, '9.9.9.9'), tokenBytes('test-token'))
+  infoHashManager.add(infoHashHex, new Peer(9999, '9.9.9.9'), tokenBytes('test-token'))
 
-  const handler = new RequestHandler()
+  const handler = requestHandler
   const sender = new MockSender()
   await handler.handle(
     { t: 'dd', y: MessageType.QUERY, q: QueryType.GET_PEERS, a: { id: REMOTE_ID, info_hash: infoHash } },
@@ -177,7 +180,7 @@ Deno.test('RequestHandler - get_peers 有已知 peers 时返回含 values 的 RE
 Deno.test('RequestHandler - get_peers 无 peers 但有最近节点时返回含 nodes 的 RESPONSE', async () => {
   const infoHash = makeInfoHash('unknown-file')
 
-  const handler = new RequestHandler()
+  const handler = requestHandler
   const sender = new MockSender()
   await handler.handle(
     { t: 'de', y: MessageType.QUERY, q: QueryType.GET_PEERS, a: { id: REMOTE_ID, info_hash: infoHash } },
@@ -193,11 +196,11 @@ Deno.test('RequestHandler - get_peers 无 peers 但有最近节点时返回含 n
 
 Deno.test('RequestHandler - get_peers 无 peers 且路由表为空时返回 GENERIC 错误', async () => {
   // 清空路由表
-  RoutingTable.get().getAllNodes().forEach((n) => RoutingTable.get().remove(n))
+  routingTable.getAllNodes().forEach((n) => routingTable.remove(n))
 
   const infoHash = makeInfoHash('no-peers-no-nodes')
 
-  const handler = new RequestHandler()
+  const handler = requestHandler
   const sender = new MockSender()
   await handler.handle(
     { t: 'df', y: MessageType.QUERY, q: QueryType.GET_PEERS, a: { id: REMOTE_ID, info_hash: infoHash } },
@@ -211,7 +214,7 @@ Deno.test('RequestHandler - get_peers 无 peers 且路由表为空时返回 GENE
 // ─── announce_peer ────────────────────────────────────────────────────────────
 
 Deno.test('RequestHandler - announce_peer infoHash 无效时返回 PROTOCOL 错误', async () => {
-  const handler = new RequestHandler()
+  const handler = requestHandler
   const sender = new MockSender()
   await handler.handle(
     {
@@ -228,7 +231,7 @@ Deno.test('RequestHandler - announce_peer infoHash 无效时返回 PROTOCOL 错�
 })
 
 Deno.test('RequestHandler - announce_peer 缺少 port 时返回 PROTOCOL 错误', async () => {
-  const handler = new RequestHandler()
+  const handler = requestHandler
   const sender = new MockSender()
   await handler.handle(
     {
@@ -248,9 +251,9 @@ Deno.test('RequestHandler - announce_peer 合法请求返回 RESPONSE 并存储 
   const infoHash = makeInfoHash('announce-file')
   const infoHashHex = encodeHex(infoHash)
 
-  const handler = new RequestHandler()
+  const handler = requestHandler
   const sender = new MockSender()
-  const token = TokenManager.get().issue(REMOTE_ADDR)
+  const token = tokenManager.issue(REMOTE_ADDR)
   await handler.handle(
     {
       t: 'eg',
@@ -265,7 +268,7 @@ Deno.test('RequestHandler - announce_peer 合法请求返回 RESPONSE 并存储 
   assertEquals(sender.getMessageAt(0)?.y, MessageType.RESPONSE)
 
   // peer 应已被存储到 InfoHashManager
-  const peers = InfoHashManager.get().find(infoHashHex)
+  const peers = infoHashManager.find(infoHashHex)
   assertEquals(peers !== undefined && peers.length > 0, true)
 })
 
@@ -273,9 +276,9 @@ Deno.test('RequestHandler - announce_peer implied_port=1 时使用发送方端�
   const infoHash = makeInfoHash('announce-implied-port')
   const infoHashHex = encodeHex(infoHash)
 
-  const handler = new RequestHandler()
+  const handler = requestHandler
   const sender = new MockSender()
-  const token = TokenManager.get().issue(REMOTE_ADDR)
+  const token = tokenManager.issue(REMOTE_ADDR)
   await handler.handle(
     {
       t: 'eh',
@@ -290,20 +293,20 @@ Deno.test('RequestHandler - announce_peer implied_port=1 时使用发送方端�
   assertEquals(sender.getMessageAt(0)?.y, MessageType.RESPONSE)
 
   // implied_port=1：应使用发送方端口（REMOTE_PORT）而非 a.port
-  const peers = InfoHashManager.get().find(infoHashHex)
+  const peers = infoHashManager.find(infoHashHex)
   assertEquals(peers?.[0]?.port, REMOTE_PORT)
 })
 
 // ─── getHandleMessageType ─────────────────────────────────────────────────────
 
 Deno.test('RequestHandler.getHandleMessageType - 返回 QUERY 类型', () => {
-  assertEquals(new RequestHandler().getHandleMessageType(), MessageType.QUERY)
+  assertEquals(requestHandler.getHandleMessageType(), MessageType.QUERY)
 })
 
 // ─── announce_peer 缺少 token ─────────────────────────────────────────────────
 
 Deno.test('RequestHandler - announce_peer 缺少 token 时返回 PROTOCOL 错误', async () => {
-  const handler = new RequestHandler()
+  const handler = requestHandler
   const sender = new MockSender()
   await handler.handle(
     {
@@ -326,9 +329,9 @@ Deno.test('RequestHandler - announce_peer token 与已记录不匹配时返回 P
   const infoHash = makeInfoHash('mismatch-token-file')
   const infoHashHex = encodeHex(infoHash)
   // 预先为该 infohash 注册 token-a
-  InfoHashManager.get().add(infoHashHex, new Peer(8001, '8.0.0.1'), tokenBytes('token-a'))
+  infoHashManager.add(infoHashHex, new Peer(8001, '8.0.0.1'), tokenBytes('token-a'))
 
-  const handler = new RequestHandler()
+  const handler = requestHandler
   const sender = new MockSender()
   await handler.handle(
     {
@@ -346,7 +349,7 @@ Deno.test('RequestHandler - announce_peer token 与已记录不匹配时返回 P
 
 Deno.test('RequestHandler - announce_peer 未经 get_peers 签发的 token 返回 PROTOCOL 错误', async () => {
   const sender = new MockSender()
-  await new RequestHandler().handle(
+  await requestHandler.handle(
     {
       t: 'ej2',
       y: MessageType.QUERY,
@@ -368,7 +371,7 @@ Deno.test('RequestHandler - announce_peer 未经 get_peers 签发的 token 返�
 // ─── 未知查询类型 ─────────────────────────────────────────────────────────────
 
 Deno.test('RequestHandler - 未知查询类型返回 METHOD_UNKNOWN', async () => {
-  const handler = new RequestHandler()
+  const handler = requestHandler
   const sender = new MockSender()
   await handler.handle(
     { t: 'ek', y: MessageType.QUERY, q: 'unknown_type' as QueryType, a: { id: REMOTE_ID } },
@@ -381,7 +384,7 @@ Deno.test('RequestHandler - 未知查询类型返回 METHOD_UNKNOWN', async () =
 
 Deno.test('RequestHandler - get_peers 缺少 info_hash 时返回 PROTOCOL', async () => {
   const sender = new MockSender()
-  await new RequestHandler().handle(
+  await requestHandler.handle(
     { t: 'el', y: MessageType.QUERY, q: QueryType.GET_PEERS, a: { id: REMOTE_ID } },
     REMOTE_ADDR,
     REMOTE_PORT,
@@ -392,7 +395,7 @@ Deno.test('RequestHandler - get_peers 缺少 info_hash 时返回 PROTOCOL', asyn
 
 Deno.test('RequestHandler - announce_peer 非法 implied_port 返回 PROTOCOL', async () => {
   const sender = new MockSender()
-  await new RequestHandler().handle(
+  await requestHandler.handle(
     {
       t: 'em',
       y: MessageType.QUERY,

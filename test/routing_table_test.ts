@@ -3,7 +3,7 @@
  *
  * 注意：RoutingTable 是单例，测试文件中只初始化一次，所有测试共享同一实例。
  */
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals } from '@std/assert'
 import Id from '../src/id.ts'
 import LocalNode from '../src/local_node.ts'
 import Node from '../src/node.ts'
@@ -24,19 +24,15 @@ const localId = Id.fromUnit8Array(localIdBytes)
 const localNode = new LocalNode(localId, 16666, '127.0.0.1')
 
 // 初始化路由表（单例，整个测试文件只调用一次）
-RoutingTable.init(localNode)
-const rt = RoutingTable.get()
+const rt = new RoutingTable(localNode)
 
 // ─── get / init 单例 ──────────────────────────────────────────────────────────
 
-Deno.test('RoutingTable.get - 未初始化时抛出异常（第二次 init 应抛出）', () => {
-  assertThrows(() => {
-    RoutingTable.init(localNode) // 重复初始化应抛出
-  })
-})
-
-Deno.test('RoutingTable.get - 返回已初始化的实例', () => {
-  assertEquals(RoutingTable.get() === rt, true)
+Deno.test('RoutingTable - instances keep routing state isolated', () => {
+  const other = new RoutingTable(new LocalNode(Id.random(), 16667, '127.0.0.2'))
+  other.add(makeNode('isolated-node'))
+  assertEquals(other.nodeCount, 1)
+  assertEquals(rt.findNode(other.getAllNodes()[0].id), undefined)
 })
 
 // ─── localNode ────────────────────────────────────────────────────────────────

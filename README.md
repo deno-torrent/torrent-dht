@@ -31,12 +31,12 @@ Or add to `deno.jsonc`:
 ## Quick Start
 
 ```ts
-import { DHT, RoutingTable } from '@deno-torrent/torrent-dht'
+import { DHT } from '@deno-torrent/torrent-dht'
 
 const dht = await DHT.listen(6881)
 
 setInterval(async () => {
-  if (RoutingTable.get().nodeCount < 16) {
+  if (dht.routingTable.nodeCount < 16) {
     await dht.pingBootstrapNodes()
     await dht.sendFindNodeRequest()
   }
@@ -65,11 +65,11 @@ deno run -A --unstable-net your_app.ts
 | `dht.sendGetPeersRequest(infoHash)` | Send get_peers to the closest known nodes           |
 | `dht.close()`                       | Close the UDP socket; repeated calls are safe       |
 
-### RoutingTable (singleton)
+### RoutingTable
 
 | Method / Property                 | Description                                |
 | --------------------------------- | ------------------------------------------ |
-| `RoutingTable.get()`              | Get the singleton instance                 |
+| `dht.routingTable`                | Get this DHT instance's routing table      |
 | `rt.nodeCount`                    | Total number of nodes in the routing table |
 | `rt.add(node)`                    | Add a node                                 |
 | `rt.remove(node)`                 | Remove a node                              |
@@ -184,12 +184,12 @@ import { DHT } from 'jsr:@deno-torrent/torrent-dht@^2.0.0'
 ## 快速开始
 
 ```ts
-import { DHT, RoutingTable } from '@deno-torrent/torrent-dht'
+import { DHT } from '@deno-torrent/torrent-dht'
 
 const dht = await DHT.listen(6881)
 
 setInterval(async () => {
-  if (RoutingTable.get().nodeCount < 16) {
+  if (dht.routingTable.nodeCount < 16) {
     await dht.pingBootstrapNodes()
     await dht.sendFindNodeRequest()
   }
@@ -217,11 +217,11 @@ deno run -A --unstable-net your_app.ts
 | `dht.sendGetPeersRequest(infoHash)` | 向最近节点发送 get_peers 请求            |
 | `dht.close()`                       | 关闭 UDP socket；重复调用安全            |
 
-### RoutingTable（单例）
+### RoutingTable
 
 | 方法 / 属性                       | 说明                         |
 | --------------------------------- | ---------------------------- |
-| `RoutingTable.get()`              | 获取单例实例                 |
+| `dht.routingTable`                | 获取当前 DHT 实例的路由表    |
 | `rt.nodeCount`                    | 当前路由表节点总数           |
 | `rt.add(node)`                    | 添加节点                     |
 | `rt.remove(node)`                 | 移除节点                     |

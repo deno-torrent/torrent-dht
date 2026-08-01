@@ -8,16 +8,11 @@ import MessageFactory, { ErrorType, MessageType, QueryType } from '../src/messag
 import Id from '../src/id.ts'
 import Node from '../src/node.ts'
 import Peer from '../src/peer.ts'
-import LocalNode from '../src/local_node.ts'
-import RoutingTable from '../src/routing_table.ts'
 import { sha1 } from '../src/util/hash.ts'
 
 const tokenBytes = (value: string): Uint8Array => new TextEncoder().encode(value)
 
-// response* 方法需要访问 RoutingTable.get().localNode，提前初始化单例
 const localId = Id.fromUnit8Array(sha1(new TextEncoder().encode('message-factory-test')))
-const localNode = new LocalNode(localId, 16888, '127.0.0.1')
-RoutingTable.init(localNode)
 
 const nodeId = Id.random()
 
@@ -88,9 +83,9 @@ Deno.test('MessageFactory.responseError - 无描述时 e[1] 为空字符串', ()
 // ─── responsePing ────────────────────────────────────────────────────────────
 
 Deno.test('MessageFactory.responsePing - 包含本地节点 ID', () => {
-  const msg = MessageFactory.responsePing('gg').message()
+  const msg = MessageFactory.responsePing('gg', localId).message()
   assertEquals(msg.y, MessageType.RESPONSE)
-  assertEquals(msg.r?.id, localNode.id.bits.bytes)
+  assertEquals(msg.r?.id, localId.bits.bytes)
 })
 
 // ─── responseFindNode ────────────────────────────────────────────────────────
@@ -99,7 +94,7 @@ Deno.test('MessageFactory.responseFindNode - nodes 长度等于节点数 × 26',
   const id1 = Id.fromUnit8Array(sha1(new TextEncoder().encode('n1')))
   const id2 = Id.fromUnit8Array(sha1(new TextEncoder().encode('n2')))
   const nodes = [new Node(id1, 1111, '1.1.1.1'), new Node(id2, 2222, '2.2.2.2')]
-  const msg = MessageFactory.responseFindNode('hh', nodes).message()
+  const msg = MessageFactory.responseFindNode('hh', localId, nodes).message()
   assertEquals(msg.y, MessageType.RESPONSE)
   assertEquals(msg.r?.nodes?.length, 52) // 2 × 26
 })
@@ -108,7 +103,7 @@ Deno.test('MessageFactory.responseFindNode - nodes 长度等于节点数 × 26',
 
 Deno.test('MessageFactory.responseGetPeers - 有 peers 时返回 values 字段', () => {
   const peer = new Peer(9999, '9.9.9.9')
-  const msg = MessageFactory.responseGetPeers('ii', [peer]).message()
+  const msg = MessageFactory.responseGetPeers('ii', localId, [peer]).message()
   assertEquals(msg.y, MessageType.RESPONSE)
   assertEquals(Array.isArray(msg.r?.values), true)
   assertEquals(msg.r?.values?.length, 1)
@@ -117,7 +112,7 @@ Deno.test('MessageFactory.responseGetPeers - 有 peers 时返回 values 字段',
 Deno.test('MessageFactory.responseGetPeers - 有 nodes 时返回 nodes 字段', () => {
   const n = new Node(Id.random(), 1234, '1.2.3.4')
   const token = tokenBytes('announce-token')
-  const msg = MessageFactory.responseGetPeers('jj', undefined, [n], token).message()
+  const msg = MessageFactory.responseGetPeers('jj', localId, undefined, [n], token).message()
   assertEquals(msg.r?.nodes instanceof Uint8Array, true)
   assertEquals(msg.r?.token, token)
 })
@@ -138,7 +133,7 @@ Deno.test('MessageFactory - opaque binary token survives bencode round trip', as
 Deno.test('MessageFactory.responseGetPeers - peers/nodes 均为空时抛出异常', () => {
   let threw = false
   try {
-    MessageFactory.responseGetPeers('kk')
+    MessageFactory.responseGetPeers('kk', localId)
   } catch {
     threw = true
   }
@@ -228,15 +223,15 @@ Deno.test('MessageFactory.decode - 拒绝超过 KRPC 嵌套上限的数据', asy
 // ─── responseAnnouncePeer ────────────────────────────────────────────────────
 
 Deno.test('MessageFactory.responseAnnouncePeer - 返回正确类型的响应消息', () => {
-  const msg = MessageFactory.responseAnnouncePeer('mm').message()
+  const msg = MessageFactory.responseAnnouncePeer('mm', localId).message()
   assertEquals(msg.y, MessageType.RESPONSE)
   assertEquals(msg.t, 'mm')
   // announce_peer 响应只包含本地节点 ID
-  assertEquals(msg.r?.id, localNode.id.bits.bytes)
+  assertEquals(msg.r?.id, localId.bits.bytes)
 })
 
 Deno.test('MessageFactory bencode/decode - announce_peer 响应往返', async () => {
-  const encoded = await MessageFactory.responseAnnouncePeer('nn').bencode()
+  const encoded = await MessageFactory.responseAnnouncePeer('nn', localId).bencode()
   const decoded = await MessageFactory.decode(encoded)
   assertEquals(decoded?.y, MessageType.RESPONSE)
   assertEquals(decoded?.t, 'nn')
