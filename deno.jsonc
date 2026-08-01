@@ -4,6 +4,17 @@
   "exports": {
     ".": "./mod.ts"
   },
+  "publish": {
+    "include": [
+      "LICENSE",
+      "README.md",
+      "MIGRATION_2.0.md",
+      "RELEASING.md",
+      "deno.jsonc",
+      "mod.ts",
+      "src/**/*.ts"
+    ]
+  },
   "imports": {
     // JSR 官方库 - deno-torrent 套件
     "@deno-torrent/bencode": "jsr:@deno-torrent/bencode@^2.0.0",
@@ -23,7 +34,8 @@
     "check": "deno check --frozen mod.ts main.ts && deno test --no-run --frozen",
     "test": "deno test --frozen --ignore=test/dht_test.ts --ignore=test/dht_network_test.ts",
     "test:integration": "deno test -A --unstable-net --frozen test/dht_test.ts",
-    "test:network": "deno test -A --unstable-net --frozen test/dht_network_test.ts"
+    "test:network": "deno test -A --unstable-net --frozen test/dht_network_test.ts",
+    "verify:version": "deno run --allow-read=deno.jsonc scripts/verify_version.ts"
   },
   "test": {
     "include": [

@@ -1,0 +1,44 @@
+name: publish
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    name: Publish to JSR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+
+      - name: Verify release tag
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: deno task verify:version "$RELEASE_TAG"
+
+      - name: Check formatting
+        run: deno task fmt
+
+      - name: Lint
+        run: deno task lint
+
+      - name: Type-check
+        run: deno task check
+
+      - name: Test
+        run: deno task test
+
+      - name: Verify package
+        run: deno publish --dry-run
+
+      - name: Publish to JSR with OIDC
+        run: deno publish

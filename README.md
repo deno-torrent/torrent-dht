@@ -99,7 +99,8 @@ UDP traffic or those nodes are unavailable; it is intentionally not part of the 
 ## Development
 
 Use the current stable Deno 2.x release. Before opening a pull request, run the four default quality tasks above. To
-verify the JSR package contents locally, run `deno publish --dry-run`.
+verify the JSR package contents locally, run `deno publish --dry-run`. Maintainers should follow
+[RELEASING.md](./RELEASING.md) for the version, tag, and tokenless JSR publication process.
 
 ## Protocol Safety
 
@@ -244,7 +245,7 @@ deno task test:network
 ## 开发
 
 请使用当前稳定版 Deno 2.x。提交 Pull Request 前运行上述四个默认质量任务；可使用 `deno publish --dry-run` 在本地验证 JSR
-包内容。
+包内容。维护者发布新版本时应遵循 [RELEASING.md](./RELEASING.md) 中的版本、Tag 与无 Token JSR 发布流程。
 
 ## 协议安全
 
