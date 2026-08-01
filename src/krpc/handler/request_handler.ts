@@ -2,6 +2,7 @@ import Id from '~/src/id.ts'
 import InfoHashManager from '~/src/info_hash_manager.ts'
 import { MessageHandler } from '~/src/krpc/krpc.ts'
 import Sender from '~/src/krpc/sender.ts'
+import TokenManager from '~/src/krpc/token_manager.ts'
 import MessageFactory, { ErrorType, Message, MessageType, QueryType } from '~/src/message_factory.ts'
 import Node from '~/src/node.ts'
 import Peer from '~/src/peer.ts'
@@ -123,7 +124,7 @@ export default class RequestHandler implements MessageHandler {
 
     const infoHashHex = BytesUtil.bytes2HexStr(infoHash)
     const peers = InfoHashManager.get().find(infoHashHex)
-    const token = InfoHashManager.get().findToken(infoHashHex)
+    const token = TokenManager.get().issue(reqNode.addr)
 
     let response: MessageFactory
     if (peers && peers.length > 0) {
@@ -136,7 +137,7 @@ export default class RequestHandler implements MessageHandler {
       if (closestNodes && closestNodes.length > 0) {
         logger.info(`[${tid}]: find ${closestNodes.length} nodes for info hash: ${infoHashHex}}`)
         // return closest nodes
-        response = MessageFactory.responseGetPeers(tid, undefined, closestNodes, undefined)
+        response = MessageFactory.responseGetPeers(tid, undefined, closestNodes, token)
       } else {
         logger.error(`[${tid}]: can not find peers or nodes for info hash: ${infoHashHex}}`)
         response = MessageFactory.responseError(
@@ -203,16 +204,14 @@ export default class RequestHandler implements MessageHandler {
 
     // 0 or 1, 1 means use the sender port, ignore the port in the request. 0 means use the port in the request as the download port
     // if the node is behind a NAT, the sender port is the public port, the download port is the private port, at this time, the implied_port should be 1
-    // validate the token of the info hash
-    const tokenOfInfoHash = InfoHashManager.get().findToken(BytesUtil.bytes2HexStr(infoHash))
-
-    if (tokenOfInfoHash && tokenOfInfoHash !== token) {
+    // BEP 5 tokens authorize the requester's IP, not a globally shared info hash.
+    if (!TokenManager.get().validate(token, reqNode.addr)) {
       logger.error(`[${tid}]: invalid token: ${token}`)
 
       await sender.sendMessage(
         reqNode.port,
         reqNode.addr,
-        MessageFactory.responseError(tid, ErrorType.PROTOCOL, 'token not match'),
+        MessageFactory.responseError(tid, ErrorType.PROTOCOL, 'invalid token'),
       )
       return
     }
@@ -222,7 +221,7 @@ export default class RequestHandler implements MessageHandler {
     const downloadPort = impliedPort === 1 ? reqNode.port : port
 
     // store the peer
-    InfoHashManager.get().add(infoHashHex, new Peer(downloadPort, reqNode.addr), token)
+    InfoHashManager.get().addValidatedPeer(infoHashHex, new Peer(downloadPort, reqNode.addr))
 
     // response to the request node
     await sender.sendMessage(reqNode.port, reqNode.addr, MessageFactory.responseAnnouncePeer(tid))

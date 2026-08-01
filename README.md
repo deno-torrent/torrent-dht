@@ -107,6 +107,9 @@ Incoming KRPC datagrams are decoded with UDP-size and nesting limits. Malformed 
 or error packets are accepted only when their source IP and port match the original request. Unknown query methods
 receive the BEP-5 `204 Method Unknown` error.
 
+`get_peers` announce tokens are bound to the requester's IP address, rotate every five minutes, and remain valid for at
+most one previous rotation window. An `announce_peer` request without a valid issued token is rejected.
+
 Call `dht.close()` when the node is no longer needed so its UDP socket is released.
 
 ## Error Handling
@@ -247,6 +250,9 @@ deno task test:network
 
 入站 KRPC 数据报受 UDP 大小和嵌套深度限制。结构异常的消息会被丢弃；响应或错误报文仅在来源
 IP、端口与原请求目标一致时才会被接受。未知查询方法会收到 BEP-5 的 `204 Method Unknown` 错误。
+
+`get_peers` 的 announce token 与请求方 IP 绑定，每五分钟轮换，并且最多保留前一个轮换窗口。未携带有效已签发 token 的
+`announce_peer` 请求会被拒绝。
 
 节点不再使用时请调用 `dht.close()`，以释放 UDP socket。
 

@@ -442,6 +442,7 @@ export default class MessageFactory {
         y: MessageType.RESPONSE,
         r: {
           id: RoutingTable.get().localNode.id.bits.bytes,
+          token,
           nodes: concat(compactNodeList),
         },
       })

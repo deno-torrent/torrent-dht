@@ -7,6 +7,7 @@
 import { assertEquals } from '@std/assert'
 import { encodeHex } from '@std/encoding/hex'
 import RequestHandler from '../src/krpc/handler/request_handler.ts'
+import TokenManager from '../src/krpc/token_manager.ts'
 import { ErrorType, MessageType, QueryType } from '../src/message_factory.ts'
 import RoutingTable from '../src/routing_table.ts'
 import InfoHashManager from '../src/info_hash_manager.ts'
@@ -169,6 +170,7 @@ Deno.test('RequestHandler - get_peers 有已知 peers 时返回含 values 的 RE
   const msg = sender.getMessageAt(0)
   assertEquals(msg?.y, MessageType.RESPONSE)
   assertEquals(Array.isArray(msg?.r?.values), true)
+  assertEquals(typeof msg?.r?.token, 'string')
 })
 
 Deno.test('RequestHandler - get_peers 无 peers 但有最近节点时返回含 nodes 的 RESPONSE', async () => {
@@ -185,6 +187,7 @@ Deno.test('RequestHandler - get_peers 无 peers 但有最近节点时返回含 n
   const msg = sender.getMessageAt(0)
   // 路由表中有节点（上一个测试添加的），所以应返回 RESPONSE（带 nodes）
   assertEquals(msg?.y, MessageType.RESPONSE)
+  assertEquals(typeof msg?.r?.token, 'string')
 })
 
 Deno.test('RequestHandler - get_peers 无 peers 且路由表为空时返回 GENERIC 错误', async () => {
@@ -246,12 +249,13 @@ Deno.test('RequestHandler - announce_peer 合法请求返回 RESPONSE 并存储 
 
   const handler = new RequestHandler()
   const sender = new MockSender()
+  const token = TokenManager.get().issue(REMOTE_ADDR)
   await handler.handle(
     {
       t: 'eg',
       y: MessageType.QUERY,
       q: QueryType.ANNOUNCE_PEER,
-      a: { id: REMOTE_ID, info_hash: infoHash, port: 51413, implied_port: 0, token: 'valid-token' },
+      a: { id: REMOTE_ID, info_hash: infoHash, port: 51413, implied_port: 0, token },
     },
     REMOTE_ADDR,
     REMOTE_PORT,
@@ -270,12 +274,13 @@ Deno.test('RequestHandler - announce_peer implied_port=1 时使用发送方端�
 
   const handler = new RequestHandler()
   const sender = new MockSender()
+  const token = TokenManager.get().issue(REMOTE_ADDR)
   await handler.handle(
     {
       t: 'eh',
       y: MessageType.QUERY,
       q: QueryType.ANNOUNCE_PEER,
-      a: { id: REMOTE_ID, info_hash: infoHash, port: 99999, implied_port: 1, token: 'valid-token' },
+      a: { id: REMOTE_ID, info_hash: infoHash, port: 99999, implied_port: 1, token },
     },
     REMOTE_ADDR,
     REMOTE_PORT,
@@ -330,6 +335,27 @@ Deno.test('RequestHandler - announce_peer token 与已记录不匹配时返回 P
       y: MessageType.QUERY,
       q: QueryType.ANNOUNCE_PEER,
       a: { id: REMOTE_ID, info_hash: infoHash, port: 6882, token: 'token-b' }, // token 不匹配
+    },
+    REMOTE_ADDR,
+    REMOTE_PORT,
+    sender,
+  )
+  assertEquals(sender.getMessageAt(0)?.e?.[0], ErrorType.PROTOCOL)
+})
+
+Deno.test('RequestHandler - announce_peer 未经 get_peers 签发的 token 返回 PROTOCOL 错误', async () => {
+  const sender = new MockSender()
+  await new RequestHandler().handle(
+    {
+      t: 'ej2',
+      y: MessageType.QUERY,
+      q: QueryType.ANNOUNCE_PEER,
+      a: {
+        id: REMOTE_ID,
+        info_hash: makeInfoHash('unissued-token-file'),
+        port: 6882,
+        token: 'arbitrary-non-empty-token',
+      },
     },
     REMOTE_ADDR,
     REMOTE_PORT,

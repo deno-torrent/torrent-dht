@@ -47,6 +47,15 @@ export default class InfoHashManager {
    * @param peer Peer
    */
   add(infoHash: string, peer: Peer, token: string): void {
+    this.#addPeer(infoHash, peer, token)
+  }
+
+  /** Store a peer whose announce token has already been validated by KRPC. */
+  addValidatedPeer(infoHash: string, peer: Peer): void {
+    this.#addPeer(infoHash, peer)
+  }
+
+  #addPeer(infoHash: string, peer: Peer, token?: string): void {
     if (this.#infoHashes.size >= this.#MAX_INFO_HASH_NUM) {
       logger.error(
         `the number of infoHashes exceeds the limit ${this.#MAX_INFO_HASH_NUM}, ignore ${infoHash}:${peer.addr}:${peer.port}`,
@@ -57,7 +66,7 @@ export default class InfoHashManager {
     const prevToken = this.#tokenMap.get(infoHash)
 
     // check token
-    if (prevToken && prevToken !== token) {
+    if (token !== undefined && prevToken && prevToken !== token) {
       logger.error(
         `the token of ${infoHash} [${token}] is not equal to [${prevToken}], ignore ${peer.addr}:${peer.port}`,
       )
@@ -81,7 +90,7 @@ export default class InfoHashManager {
     }
 
     // set token
-    if (!prevToken) {
+    if (!prevToken && token !== undefined) {
       this.#tokenMap.set(infoHash, token)
     }
 

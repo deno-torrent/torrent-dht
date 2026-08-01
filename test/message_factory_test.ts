@@ -113,8 +113,9 @@ Deno.test('MessageFactory.responseGetPeers - 有 peers 时返回 values 字段',
 
 Deno.test('MessageFactory.responseGetPeers - 有 nodes 时返回 nodes 字段', () => {
   const n = new Node(Id.random(), 1234, '1.2.3.4')
-  const msg = MessageFactory.responseGetPeers('jj', undefined, [n]).message()
+  const msg = MessageFactory.responseGetPeers('jj', undefined, [n], 'announce-token').message()
   assertEquals(msg.r?.nodes instanceof Uint8Array, true)
+  assertEquals(msg.r?.token, 'announce-token')
 })
 
 Deno.test('MessageFactory.responseGetPeers - peers/nodes 均为空时抛出异常', () => {
