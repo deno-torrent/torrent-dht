@@ -69,7 +69,7 @@ Deno.test('Bucket.add - 重复添加同 ID 节点更新信息并返回 false', (
   assertEquals(bucket.latest!.addr, '2.2.2.2')
 })
 
-Deno.test('Bucket.add - 满桶时淘汰最旧节点', () => {
+Deno.test('Bucket.add - full bucket retains oldest until an explicit replacement', () => {
   const bucket = makeFullRangeBucket(3) // 容量 3
   bucket.add(makeNode('n1'))
   bucket.add(makeNode('n2'))
@@ -77,10 +77,13 @@ Deno.test('Bucket.add - 满桶时淘汰最旧节点', () => {
   assertEquals(bucket.isFull(), true)
 
   const oldOldest = bucket.oldest
-  bucket.add(makeNode('n4')) // 应淘汰最旧节点
+  const replacement = makeNode('n4')
+  assertEquals(bucket.add(replacement), false)
   assertEquals(bucket.size, 3)
-  // 最旧节点应已被移除
+  assertEquals(bucket.nodes.some((n) => n.id.equals(oldOldest!.id)), true)
+  assertEquals(bucket.replace(oldOldest!, replacement), true)
   assertEquals(bucket.nodes.some((n) => n.id.equals(oldOldest!.id)), false)
+  assertEquals(bucket.nodes.some((n) => n.id.equals(replacement.id)), true)
 })
 
 Deno.test('Bucket.remove - 移除存在的节点', () => {

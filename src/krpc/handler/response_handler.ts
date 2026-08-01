@@ -16,6 +16,7 @@ export default class ResponseHandler implements MessageHandler {
     private readonly routingTable: RoutingTable,
     private readonly infoHashManager: InfoHashManager,
     private readonly transactionManager: TransactionManager<Request>,
+    private readonly addNode: (node: Node) => Promise<boolean> = (node) => Promise.resolve(routingTable.add(node)),
   ) {}
 
   // tell the dispatcher this handler only handles response messages
@@ -57,17 +58,18 @@ export default class ResponseHandler implements MessageHandler {
 
     // finish the transaction only after the response source and base shape are verified
     this.transactionManager.finish(response.t)
+    request.onResult?.(true)
 
     const respNode = new Node(Id.fromUnit8Array(responseNodeId), port, addr)
 
     // dispatch by the original query type
     switch (request.type) {
       case QueryType.PING: {
-        this.handlePingResponse(respNode, tid)
+        await this.handlePingResponse(respNode, tid)
         break
       }
       case QueryType.FIND_NODE: {
-        this.handleFindNodeResponse(response, respNode, tid)
+        await this.handleFindNodeResponse(response, respNode, tid)
         break
       }
       case QueryType.GET_PEERS: {
@@ -75,7 +77,7 @@ export default class ResponseHandler implements MessageHandler {
         break
       }
       case QueryType.ANNOUNCE_PEER: {
-        this.handleAnnouncePeerResponse(respNode, tid)
+        await this.handleAnnouncePeerResponse(respNode, tid)
         break
       }
       default:
@@ -83,16 +85,16 @@ export default class ResponseHandler implements MessageHandler {
     }
   }
 
-  private handlePingResponse(respNode: Node, tid: string) {
+  private async handlePingResponse(respNode: Node, tid: string) {
     logger.info(`[<======RESPONSE-PING-${tid}] received from ${respNode.addr}:${respNode.port}`)
 
     // add the node into the routing table
-    if (!this.routingTable.add(respNode)) {
+    if (!await this.addNode(respNode)) {
       logger.error(`[${tid}] add node ${respNode} to routing table failed`)
     }
   }
 
-  private handleFindNodeResponse(response: Message, respNode: Node, tid: string) {
+  private async handleFindNodeResponse(response: Message, respNode: Node, tid: string) {
     logger.info(`[<======RESPONSE-FIND_NODE-${tid}] received from ${respNode.addr}:${respNode.port}`)
 
     const nodesBytes = response.r?.nodes
@@ -116,13 +118,13 @@ export default class ResponseHandler implements MessageHandler {
 
     for (const nodeBytes of nodesBytesList) {
       const node = Node.fromCompact(nodeBytes)
-      if (!this.routingTable.add(node)) {
+      if (!await this.addNode(node)) {
         logger.error(`[${tid}] insert node ${node} to routing table failed`)
       }
     }
 
     // update the response node
-    if (!this.routingTable.add(respNode)) {
+    if (!await this.addNode(respNode)) {
       logger.error(`[${tid}] add node ${respNode} to routing table failed`)
     }
   }
@@ -215,16 +217,16 @@ export default class ResponseHandler implements MessageHandler {
     }
 
     // update the response node
-    if (!this.routingTable.add(respNode)) {
+    if (!await this.addNode(respNode)) {
       logger.error(`[${tid}] add node ${respNode} to routing table failed`)
     }
   }
 
-  private handleAnnouncePeerResponse(respNode: Node, tid: string) {
+  private async handleAnnouncePeerResponse(respNode: Node, tid: string) {
     logger.info(`[<======RESPONSE-ANNOUNCE_PEER-${tid}] received from ${respNode.addr}:${respNode.port}`)
 
     // update the response node
-    if (!this.routingTable.add(respNode)) {
+    if (!await this.addNode(respNode)) {
       logger.error(`[${tid}] add node ${respNode} to routing table failed`)
     }
   }

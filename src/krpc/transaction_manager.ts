@@ -6,6 +6,8 @@ export type Request = {
   addr: string
   port: number
   infoHash?: Uint8Array // only for get_peers query and announce_peer query
+  /** Internal completion hook used by bounded liveness probes. */
+  onResult?: (reachable: boolean) => void
 }
 
 /**
@@ -34,6 +36,11 @@ export default class TransactionManager<T> {
   constructor(expiredTime?: number) {
     this.#expiredTime = expiredTime || this.#EXPIRED_TIME
     this.initIdPool()
+  }
+
+  /** Number of currently active transactions. */
+  get size(): number {
+    return this.#transactions.size
   }
 
   /**

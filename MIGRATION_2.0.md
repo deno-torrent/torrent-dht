@@ -73,6 +73,15 @@ dht.infoHashManager.find(infoHash)
 Direct consumers construct manager classes with `new`. KRPC response factory methods now require the responding local
 node ID explicitly, for example `MessageFactory.responsePing(tid, localNodeId)`.
 
+## Routing and send failures
+
+Full K-buckets no longer evict their oldest entry synchronously. `Bucket.add()` returns `false` while full;
+`Bucket.replace()` and `RoutingTable.replace()` are explicit operations used after a failed liveness probe. DHT-managed
+discovery performs the BEP 5 ping-before-replace flow automatically.
+
+KRPC send methods now reject when UDP transmission fails. The associated transaction is released before rejection, so
+callers should handle the returned promise rather than relying only on logs.
+
 ## Runtime and permissions
 
 Version 2 supports the current stable Deno 2.x line. Toolkit 2.0 obtains MAC addresses through

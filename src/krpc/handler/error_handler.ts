@@ -30,6 +30,7 @@ export default class ErrorResponseHandler implements MessageHandler {
 
     // finish transaction only after verifying the source endpoint
     this.transactionManager.finish(tid)
+    request.onResult?.(false)
 
     if (error) {
       const [errorCode, errorMessage] = error

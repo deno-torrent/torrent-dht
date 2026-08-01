@@ -13,6 +13,13 @@ import RoutingTable from '~/src/routing_table.ts'
 import logger from '~/src/util/log.ts'
 import { NetUtil } from '@deno-torrent/toolkit'
 
+const NODE_PROBE_TIMEOUT_MS = 2_000
+
+export interface DatagramTransport extends AsyncIterable<[Uint8Array, Deno.Addr]> {
+  send(data: Uint8Array, address: Deno.Addr): Promise<number>
+  close(): void
+}
+
 export interface MessageHandler {
   /**
    * get the message type, then the dispatcher will call the handle() method
@@ -27,7 +34,7 @@ export interface MessageHandler {
  */
 export class KRPC implements Sender {
   #port: number
-  #udp: Deno.DatagramConn
+  #udp: DatagramTransport
   #closed = false
   #messageHandlers: Map<MessageType, MessageHandler>
 
@@ -37,20 +44,31 @@ export class KRPC implements Sender {
     private readonly transactionManager: TransactionManager<Request>,
     infoHashManager: InfoHashManager,
     tokenManager: TokenManager,
+    udp?: DatagramTransport,
+    private readonly probeTimeoutMs = NODE_PROBE_TIMEOUT_MS,
   ) {
     this.#port = port
     this.#messageHandlers = new Map<MessageType, MessageHandler>([
-      [MessageType.RESPONSE, new ResponseHandler(routingTable, infoHashManager, transactionManager)],
+      [
+        MessageType.RESPONSE,
+        new ResponseHandler(
+          routingTable,
+          infoHashManager,
+          transactionManager,
+          (node) => this.considerNode(node),
+        ),
+      ],
       [MessageType.QUERY, new RequestHandler(routingTable, infoHashManager, tokenManager)],
       [MessageType.ERROR, new ErrorResponseHandler(transactionManager)],
     ])
 
     // initilize the a udp listener and sender
-    this.#udp = Deno.listenDatagram({
-      port: this.#port,
-      transport: 'udp',
-      hostname: '0.0.0.0', // listen on all interfaces
-    })
+    this.#udp = udp ??
+      Deno.listenDatagram({
+        port: this.#port,
+        transport: 'udp',
+        hostname: '0.0.0.0', // listen on all interfaces
+      })
 
     // async handle response
     void this.handlePacket()
@@ -66,9 +84,14 @@ export class KRPC implements Sender {
     infoHashManager: InfoHashManager,
     transactionManager: TransactionManager<Request>,
     tokenManager: TokenManager,
+    udp?: DatagramTransport,
+    probeTimeoutMs?: number,
   ) {
     if (!NetUtil.isNetPort(port)) throw new Error('invalid port, should be in range [0, 65535], but got ' + port)
-    return new KRPC(port, routingTable, transactionManager, infoHashManager, tokenManager)
+    if (probeTimeoutMs !== undefined && (!Number.isFinite(probeTimeoutMs) || probeTimeoutMs <= 0)) {
+      throw new RangeError('probeTimeoutMs must be greater than zero')
+    }
+    return new KRPC(port, routingTable, transactionManager, infoHashManager, tokenManager, udp, probeTimeoutMs)
   }
 
   /**
@@ -144,7 +167,56 @@ export class KRPC implements Sender {
       // logger.info(`[======>SEND] send message to ${addr}:${port} success: (${JSON.stringify(message)}`)
     } catch (e) {
       logger.error(`[======>SEND] send message to ${addr}:${port} failed`, e)
+      throw new Error(`failed to send KRPC message to ${addr}:${port}`, { cause: e })
     }
+  }
+
+  async #sendTracked(tid: string, port: number, address: string, message: MessageFactory): Promise<void> {
+    try {
+      await this.sendMessage(port, address, message)
+    } catch (error) {
+      if (this.transactionManager.isValid(tid)) this.transactionManager.finish(tid)
+      throw error
+    }
+  }
+
+  /** Apply BEP 5 ping-before-replace semantics to a discovered node. */
+  async considerNode(node: Node): Promise<boolean> {
+    if (this.routingTable.findNode(node.id)) {
+      this.routingTable.add(node)
+      return true
+    }
+
+    const candidate = this.routingTable.replacementCandidate(node)
+    if (!candidate) return this.routingTable.add(node)
+    if (await this.#probeNode(candidate)) return false
+    return this.routingTable.replace(candidate, node)
+  }
+
+  #probeNode(node: Node): Promise<boolean> {
+    return new Promise<boolean>((resolve) => {
+      let settled = false
+      const settle = (reachable: boolean) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        resolve(reachable)
+      }
+
+      const tid = this.transactionManager.create({
+        type: QueryType.PING,
+        addr: node.addr,
+        port: node.port,
+        onResult: settle,
+      })
+      const timer = setTimeout(() => {
+        if (this.transactionManager.isValid(tid)) this.transactionManager.finish(tid)
+        settle(false)
+      }, this.probeTimeoutMs)
+
+      const message = MessageFactory.requestPing(tid, this.routingTable.localNode.id)
+      void this.#sendTracked(tid, node.port, node.addr, message).catch(() => settle(false))
+    })
   }
 
   /**
@@ -172,7 +244,7 @@ export class KRPC implements Sender {
     const messageFC = MessageFactory.requestPing(tid, this.routingTable.localNode.id)
 
     // send the message
-    await this.sendMessage(targetNode.port, address, messageFC)
+    await this.#sendTracked(tid, targetNode.port, address, messageFC)
   }
 
   /**
@@ -195,7 +267,7 @@ export class KRPC implements Sender {
     })
 
     const messageFC = MessageFactory.requestFindNode(tid, this.routingTable.localNode.id, targetId)
-    await this.sendMessage(port, address, messageFC)
+    await this.#sendTracked(tid, port, address, messageFC)
   }
 
   /**
@@ -213,7 +285,7 @@ export class KRPC implements Sender {
       port: targetNode.port,
     })
     const messageFC = MessageFactory.requestGetPeers(tid, this.routingTable.localNode.id, infoHash)
-    await this.sendMessage(targetNode.port, address, messageFC)
+    await this.#sendTracked(tid, targetNode.port, address, messageFC)
   }
 
   /**
@@ -241,7 +313,7 @@ export class KRPC implements Sender {
       this.#port,
       token,
     )
-    await this.sendMessage(targetNode.port, address, messageFC)
+    await this.#sendTracked(tid, targetNode.port, address, messageFC)
   }
 
   /**
@@ -256,7 +328,7 @@ export class KRPC implements Sender {
       port: port,
     })
     const messageFC = MessageFactory.requestPing(tid, this.routingTable.localNode.id)
-    await this.sendMessage(port, address, messageFC)
+    await this.#sendTracked(tid, port, address, messageFC)
   }
 
   private async resolveAddress(address: string): Promise<string> {

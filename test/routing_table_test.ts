@@ -56,6 +56,31 @@ Deno.test('RoutingTable.add - 成功添加节点并计入 nodeCount', () => {
   assertEquals(rt.nodeCount, before + 1)
 })
 
+Deno.test('RoutingTable - exposes and explicitly replaces a full-bucket candidate', () => {
+  const previousCapacity = RoutingTable.BUCKET_CAPACITY
+  RoutingTable.BUCKET_CAPACITY = 1
+  try {
+    const local = new LocalNode(Id.random(), 16668, '127.0.0.3')
+    const table = new RoutingTable(local)
+    const first = local.id.bits.bytes[0] & 0x80 ? 0x00 : 0x80
+    const firstBytes = new Uint8Array(20)
+    firstBytes[0] = first
+    const secondBytes = firstBytes.slice()
+    secondBytes[19] = 1
+    const oldest = new Node(Id.fromUnit8Array(firstBytes), 7001, '192.0.2.1')
+    const replacement = new Node(Id.fromUnit8Array(secondBytes), 7002, '192.0.2.2')
+
+    assertEquals(table.add(oldest), true)
+    assertEquals(table.add(replacement), false)
+    assertEquals(table.replacementCandidate(replacement)?.id.equals(oldest.id), true)
+    assertEquals(table.replace(oldest, replacement), true)
+    assertEquals(table.findNode(oldest.id), undefined)
+    assertEquals(table.findNode(replacement.id) !== undefined, true)
+  } finally {
+    RoutingTable.BUCKET_CAPACITY = previousCapacity
+  }
+})
+
 Deno.test('RoutingTable.remove - 移除已存在节点', () => {
   const node = makeNode('rt-remove-test', 7777, '5.5.5.5')
   rt.add(node)

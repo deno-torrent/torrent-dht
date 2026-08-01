@@ -7,7 +7,7 @@ import logger from '~/src/util/log.ts'
  * K-桶（K-Bucket）实现
  *
  * 按 XOR 距离范围 [start, end] 存储 DHT 节点，容量上限由构造时的 `capacity` 决定。
- * 新节点插入到队头（最近活跃），满时淘汰队尾（最久未活跃）。
+ * 新节点插入到队头（最近活跃）；满桶替换必须由调用方先完成节点存活探测。
  */
 export default class Bucket {
   #nodes: Node[] = []
@@ -91,7 +91,7 @@ export default class Bucket {
    * 向桶中添加节点
    *
    * - 若节点已存在，则更新其活跃时间，返回 `false`（表示未新增）
-   * - 若桶已满，淘汰最旧节点后再插入
+   * - 若桶已满，拒绝直接插入，由调用方按 BEP 5 探测最旧节点
    * - 新节点插入到队头（最近活跃位置）
    *
    * @param node 要添加的节点
@@ -109,14 +109,20 @@ export default class Bucket {
       return false
     }
 
-    if (this.isFull()) {
-      this.remove(this.oldest!)
-    }
+    if (this.isFull()) return false
 
     node.updateActivedAt()
     this.#nodes.unshift(node)
 
     return true
+  }
+
+  /** Replace a specific stale node after a liveness probe has failed. */
+  replace(staleNode: Node, replacement: Node): boolean {
+    if (!this.#nodes.some((node) => node.id.equals(staleNode.id))) return false
+    if (this.#nodes.some((node) => node.id.equals(replacement.id))) return false
+    this.remove(staleNode)
+    return this.add(replacement)
   }
 
   /** 判断桶是否已达容量上限 */

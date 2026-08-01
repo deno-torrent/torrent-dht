@@ -112,6 +112,10 @@ receive the BEP-5 `204 Method Unknown` error.
 most one previous rotation window. Tokens are exposed as opaque `Uint8Array` values and may contain non-UTF-8 bytes. An
 `announce_peer` request without a valid issued token is rejected.
 
+When a K-bucket is full, the least-recently-seen node is pinged before replacement. A responsive node is retained; only
+a failed or timed-out probe permits the newcomer to replace it. Outbound UDP failures reject the request promise and
+release its transaction immediately.
+
 Call `dht.close()` when the node is no longer needed so its UDP socket is released.
 
 ## Error Handling
@@ -259,6 +263,9 @@ IP、端口与原请求目标一致时才会被接受。未知查询方法会收
 
 `get_peers` 的 announce token 与请求方 IP 绑定，每五分钟轮换，并且最多保留前一个轮换窗口。未携带有效已签发 token 的
 `announce_peer` 请求会被拒绝。Token 以 opaque `Uint8Array` 暴露，允许包含非 UTF-8 字节。
+
+K-bucket 满时会先 ping 最久未活动节点；有响应则保留旧节点，仅在发送失败、错误响应或超时后才允许新节点替换。 出站 UDP
+发送失败会拒绝请求 Promise，并立即释放对应事务。
 
 节点不再使用时请调用 `dht.close()`，以释放 UDP socket。
 

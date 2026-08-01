@@ -104,6 +104,24 @@ export default class RoutingTable {
     return false
   }
 
+  /** Return the least-recently-seen node that must be probed before inserting a new node. */
+  replacementCandidate(node: Node): Node | undefined {
+    for (const bucket of this.#buckets) {
+      if (!bucket.withinRange(node.id)) continue
+      if (bucket.nodes.some((current) => current.id.equals(node.id))) return undefined
+      return bucket.isFull() ? bucket.oldest : undefined
+    }
+    return undefined
+  }
+
+  /** Replace a previously selected stale node if it is still present in the same bucket. */
+  replace(staleNode: Node, replacement: Node): boolean {
+    for (const bucket of this.#buckets) {
+      if (bucket.withinRange(replacement.id)) return bucket.replace(staleNode, replacement)
+    }
+    return false
+  }
+
   /**
    * 批量将节点加入路由表
    *
