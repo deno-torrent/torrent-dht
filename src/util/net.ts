@@ -15,6 +15,13 @@ enum RequestType {
   IPv6 = REQ_URL_IPV6,
 }
 
+const DEFAULT_IP_DISCOVERY_TIMEOUT_MS = 10_000
+
+type GetIPOptions = {
+  timeoutMs?: number
+  fetcher?: typeof fetch
+}
+
 /**
  * extract the compact address
  * @param bytes the compact address
@@ -82,16 +89,29 @@ export function packageCompactNode(id: Id, addr: string, port: number) {
  * @param ipv4 is IPv4
  * @returns
  */
-async function requestIPIFY(type: RequestType): Promise<string> {
+async function requestIPIFY(type: RequestType, options: GetIPOptions): Promise<string> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_IP_DISCOVERY_TIMEOUT_MS
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    throw new RangeError('IP discovery timeout must be greater than zero')
+  }
+
   try {
-    const response = await fetch(type.valueOf())
+    const response = await (options.fetcher ?? fetch)(type.valueOf(), {
+      signal: AbortSignal.timeout(timeoutMs),
+    })
+    if (!response.ok) throw new Error(`ipify returned HTTP ${response.status}`)
 
-    // get the response, note that the response is IPv4
-    const { ip } = await response.json()
+    const body: unknown = await response.json()
+    if (typeof body !== 'object' || body === null || !('ip' in body) || typeof body.ip !== 'string') {
+      throw new TypeError('ipify response does not contain an IP address')
+    }
+    if (type === RequestType.IPv4 && !NetUtil.isIPv4Str(body.ip)) {
+      throw new TypeError('ipify response does not contain a valid IPv4 address')
+    }
 
-    return ip
-  } catch (_) {
-    throw new Error('request ipify failed')
+    return body.ip
+  } catch (cause) {
+    throw new Error(`public IP discovery failed after at most ${timeoutMs}ms`, { cause })
   }
 }
 
@@ -100,8 +120,8 @@ async function requestIPIFY(type: RequestType): Promise<string> {
  * @param type the request type (IPv4 or IPv6)
  * @returns the public ip address
  */
-export async function getIP(type: RequestType = RequestType.IPv4): Promise<string> {
-  return await requestIPIFY(type)
+export async function getIP(type: RequestType = RequestType.IPv4, options: GetIPOptions = {}): Promise<string> {
+  return await requestIPIFY(type, options)
 }
 
 export function isAddr(value: string) {

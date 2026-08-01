@@ -1,12 +1,13 @@
 /**
  * 紧凑地址 / 节点编解码工具测试
  */
-import { assertEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertRejects, assertThrows } from '@std/assert'
 import {
   COMPAT_ADDR_V4_LEN,
   COMPAT_NODE_LEN,
   extractCompactAddr,
   extractCompactNode,
+  getIP,
   packageCompactAddr,
   packageCompactNode,
 } from '../src/util/net.ts'
@@ -93,4 +94,39 @@ Deno.test('isAddr - 无效输入返回 false', () => {
   assertEquals(isAddr(''), false)
   assertEquals(isAddr('not-an-address!!'), false)
   assertEquals(isAddr('999.999.999.999'), false)
+})
+
+// ─── 公网 IP 探测 ─────────────────────────────────────────────────────────────
+
+Deno.test('getIP - 校验并返回 ipify 的 IPv4 地址', async () => {
+  const fetcher = (() => Promise.resolve(Response.json({ ip: '203.0.113.1' }, { status: 200 }))) as typeof fetch
+
+  assertEquals(await getIP(undefined, { fetcher }), '203.0.113.1')
+})
+
+Deno.test('getIP - HTTP 错误和异常响应会保留为明确失败', async () => {
+  const httpFailure = (() => Promise.resolve(new Response('', { status: 503 }))) as typeof fetch
+  const invalidBody = (() => Promise.resolve(Response.json({ ip: 'not-an-ip' }))) as typeof fetch
+
+  await assertRejects(() => getIP(undefined, { fetcher: httpFailure }), Error, 'public IP discovery failed')
+  await assertRejects(() => getIP(undefined, { fetcher: invalidBody }), Error, 'public IP discovery failed')
+})
+
+Deno.test('getIP - 请求超过配置上限后中止', async () => {
+  const fetcher = ((_input: string | URL | Request, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal
+      if (!signal) return reject(new Error('missing abort signal'))
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+    })) as typeof fetch
+
+  await assertRejects(
+    () => getIP(undefined, { timeoutMs: 5, fetcher }),
+    Error,
+    'public IP discovery failed after at most 5ms',
+  )
+})
+
+Deno.test('getIP - 非法超时配置抛出 RangeError', async () => {
+  await assertRejects(() => getIP(undefined, { timeoutMs: 0 }), RangeError, 'greater than zero')
 })

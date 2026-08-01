@@ -116,7 +116,9 @@ Call `dht.close()` when the node is no longer needed so its UDP socket is releas
 ## Error Handling
 
 Invalid argument types use `TypeError`; numeric values outside their supported range use `RangeError`. Network and
-environment initialization failures reject `DHT.listen()` with an `Error`. Always release a successfully created node:
+environment initialization failures reject `DHT.listen()` with an `Error`. Public IPv4 discovery is validated and
+limited to 10 seconds, so environments that block HTTPS fail instead of leaving startup pending. Always release a
+successfully created node:
 
 ```ts
 let dht: DHT | undefined
@@ -260,7 +262,8 @@ IP、端口与原请求目标一致时才会被接受。未知查询方法会收
 ## 错误处理
 
 参数类型错误使用 `TypeError`，数值超出允许范围使用 `RangeError`。网络或运行环境初始化失败时，`DHT.listen()` 会以 `Error`
-拒绝。成功创建节点后应始终释放资源：
+拒绝。公网 IPv4 探测会验证响应并限制为 10 秒，因此禁止 HTTPS
+的环境会明确失败，而不会让启动一直等待。成功创建节点后应始终释放资源：
 
 ```ts
 let dht: DHT | undefined
