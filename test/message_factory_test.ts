@@ -136,6 +136,21 @@ Deno.test('MessageFactory bencode/decode - ping 请求往返', async () => {
   assertEquals(decoded?.t, 'aa')
   assertEquals(decoded?.y, MessageType.QUERY)
   assertEquals(decoded?.q, QueryType.PING)
+  assertEquals(decoded?.a?.id, nodeId.bits.bytes)
+})
+
+Deno.test('MessageFactory.decode - 将有效 UTF-8 的二进制协议字段恢复为 Uint8Array', async () => {
+  const asciiBytes = new Uint8Array(20).fill(0x61)
+  const asciiId = Id.fromUnit8Array(asciiBytes)
+  const ping = await MessageFactory.decode(await MessageFactory.requestPing('ab', asciiId).bencode())
+  const getPeers = await MessageFactory.decode(
+    await MessageFactory.requestGetPeers('ac', nodeId, asciiBytes).bencode(),
+  )
+
+  assertEquals(ping?.a?.id instanceof Uint8Array, true)
+  assertEquals(ping?.a?.id, asciiBytes)
+  assertEquals(getPeers?.a?.info_hash instanceof Uint8Array, true)
+  assertEquals(getPeers?.a?.info_hash, asciiBytes)
 })
 
 Deno.test('MessageFactory bencode/decode - find_node 请求往返', async () => {
@@ -161,6 +176,17 @@ Deno.test('MessageFactory.decode - 随机字节返回 undefined', async () => {
 Deno.test('MessageFactory.decode - 空数据返回 undefined', async () => {
   const result = await MessageFactory.decode(new Uint8Array(0))
   assertEquals(result, undefined)
+})
+
+Deno.test('MessageFactory.decode - 拒绝缺少类型对应容器的消息', async () => {
+  const encoder = new TextEncoder()
+  assertEquals(await MessageFactory.decode(encoder.encode('d1:t2:aa1:y1:qe')), undefined)
+  assertEquals(await MessageFactory.decode(encoder.encode('d1:t2:aa1:y1:re')), undefined)
+  assertEquals(await MessageFactory.decode(encoder.encode('d1:t2:aa1:y1:ee')), undefined)
+})
+
+Deno.test('MessageFactory.decode - 拒绝未知消息类型', async () => {
+  assertEquals(await MessageFactory.decode(new TextEncoder().encode('d1:t2:aa1:y1:xe')), undefined)
 })
 
 Deno.test('MessageFactory.decode - bencode 2.0 拒绝尾随数据', async () => {

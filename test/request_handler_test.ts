@@ -340,16 +340,47 @@ Deno.test('RequestHandler - announce_peer token 与已记录不匹配时返回 P
 
 // ─── 未知查询类型 ─────────────────────────────────────────────────────────────
 
-Deno.test('RequestHandler - 未知查询类型不发送任何消息', async () => {
+Deno.test('RequestHandler - 未知查询类型返回 METHOD_UNKNOWN', async () => {
   const handler = new RequestHandler()
   const sender = new MockSender()
   await handler.handle(
-    // deno-lint-ignore no-explicit-any
-    { t: 'ek', y: MessageType.QUERY, q: 'unknown_type' as any, a: { id: REMOTE_ID } },
+    { t: 'ek', y: MessageType.QUERY, q: 'unknown_type' as QueryType, a: { id: REMOTE_ID } },
     REMOTE_ADDR,
     REMOTE_PORT,
     sender,
   )
-  // 未知类型：仅记录日志，不发出任何回复
-  assertEquals(sender.sentMessages.length, 0)
+  assertEquals(sender.getMessageAt(0)?.e?.[0], ErrorType.METHOD_UNKNOWN)
+})
+
+Deno.test('RequestHandler - get_peers 缺少 info_hash 时返回 PROTOCOL', async () => {
+  const sender = new MockSender()
+  await new RequestHandler().handle(
+    { t: 'el', y: MessageType.QUERY, q: QueryType.GET_PEERS, a: { id: REMOTE_ID } },
+    REMOTE_ADDR,
+    REMOTE_PORT,
+    sender,
+  )
+  assertEquals(sender.getMessageAt(0)?.e?.[0], ErrorType.PROTOCOL)
+})
+
+Deno.test('RequestHandler - announce_peer 非法 implied_port 返回 PROTOCOL', async () => {
+  const sender = new MockSender()
+  await new RequestHandler().handle(
+    {
+      t: 'em',
+      y: MessageType.QUERY,
+      q: QueryType.ANNOUNCE_PEER,
+      a: {
+        id: REMOTE_ID,
+        info_hash: makeInfoHash('invalid-implied-port'),
+        port: 6881,
+        implied_port: 2,
+        token: 'token',
+      },
+    },
+    REMOTE_ADDR,
+    REMOTE_PORT,
+    sender,
+  )
+  assertEquals(sender.getMessageAt(0)?.e?.[0], ErrorType.PROTOCOL)
 })

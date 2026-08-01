@@ -100,6 +100,12 @@ UDP traffic or those nodes are unavailable; it is intentionally not part of the 
 Use the current stable Deno 2.x release. Before opening a pull request, run the four default quality tasks above. To
 verify the JSR package contents locally, run `deno publish --dry-run`.
 
+## Protocol Safety
+
+Incoming KRPC datagrams are decoded with UDP-size and nesting limits. Malformed message shapes are dropped, and response
+or error packets are accepted only when their source IP and port match the original request. Unknown query methods
+receive the BEP-5 `204 Method Unknown` error.
+
 ## Migrating from 1.x
 
 Version 2 upgrades `@deno-torrent/bencode` and `@deno-torrent/toolkit` to their 2.0 APIs. The public `BitArray` values
@@ -202,6 +208,11 @@ deno task test:network
 
 请使用当前稳定版 Deno 2.x。提交 Pull Request 前运行上述四个默认质量任务；可使用 `deno publish --dry-run` 在本地验证 JSR
 包内容。
+
+## 协议安全
+
+入站 KRPC 数据报受 UDP 大小和嵌套深度限制。结构异常的消息会被丢弃；响应或错误报文仅在来源
+IP、端口与原请求目标一致时才会被接受。未知查询方法会收到 BEP-5 的 `204 Method Unknown` 错误。
 
 ## 从 1.x 迁移
 

@@ -90,11 +90,6 @@ export class KRPC implements Sender {
         continue
       }
 
-      if (typeof message.t !== 'string') {
-        // decode tid from unit8array to string
-        message.t = new TextDecoder().decode(message.t)
-      }
-
       const tid = message.t
 
       try {
@@ -144,16 +139,17 @@ export class KRPC implements Sender {
    * @param nodeId the node id of the local node
    */
   async sendPingRequest(targetNode: Node) {
+    const address = await this.resolveAddress(targetNode.addr)
     const tid = TransactionManager.get().create({
       type: QueryType.PING,
-      addr: targetNode.addr,
+      addr: address,
       port: targetNode.port,
     })
 
     const messageFC = MessageFactory.requestPing(tid, RoutingTable.get().localNode.id)
 
     // send the message
-    await this.sendMessage(targetNode.port, targetNode.addr, messageFC)
+    await this.sendMessage(targetNode.port, address, messageFC)
   }
 
   /**
@@ -168,14 +164,15 @@ export class KRPC implements Sender {
    * @param addr
    */
   async sendFindNodeRequest(port: number, addr: string, targetId: Id) {
+    const address = await this.resolveAddress(addr)
     const tid = TransactionManager.get().create({
       type: QueryType.FIND_NODE,
-      addr: addr,
+      addr: address,
       port: port,
     })
 
     const messageFC = MessageFactory.requestFindNode(tid, RoutingTable.get().localNode.id, targetId)
-    await this.sendMessage(port, addr, messageFC)
+    await this.sendMessage(port, address, messageFC)
   }
 
   /**
@@ -185,14 +182,15 @@ export class KRPC implements Sender {
    * @param infoHash the info hash of the file
    */
   async sendGetPeersRequest(targetNode: Node, infoHash: Uint8Array) {
+    const address = await this.resolveAddress(targetNode.addr)
     const tid = TransactionManager.get().create({
       type: QueryType.GET_PEERS,
       infoHash: infoHash,
-      addr: targetNode.addr,
+      addr: address,
       port: targetNode.port,
     })
     const messageFC = MessageFactory.requestGetPeers(tid, RoutingTable.get().localNode.id, infoHash)
-    await this.sendMessage(targetNode.port, targetNode.addr, messageFC)
+    await this.sendMessage(targetNode.port, address, messageFC)
   }
 
   /**
@@ -206,10 +204,11 @@ export class KRPC implements Sender {
    * @param token the token of the node
    */
   async sendAnnouncePeerRequest(targetNode: Node, infoHash: Uint8Array, token: string) {
+    const address = await this.resolveAddress(targetNode.addr)
     const tid = TransactionManager.get().create({
       type: QueryType.ANNOUNCE_PEER,
       infoHash: infoHash,
-      addr: targetNode.addr,
+      addr: address,
       port: targetNode.port,
     })
     const messageFC = MessageFactory.requestAnnouncePeer(
@@ -219,7 +218,7 @@ export class KRPC implements Sender {
       this.#port,
       token,
     )
-    await this.sendMessage(targetNode.port, targetNode.addr, messageFC)
+    await this.sendMessage(targetNode.port, address, messageFC)
   }
 
   /**
@@ -227,12 +226,22 @@ export class KRPC implements Sender {
    * @param bootstrapNode {addr: string, port: number}
    */
   async sendPingBootrapNodesRequest({ addr, port }: { addr: string; port: number }) {
+    const address = await this.resolveAddress(addr)
     const tid = TransactionManager.get().create({
       type: QueryType.PING,
-      addr: addr,
+      addr: address,
       port: port,
     })
     const messageFC = MessageFactory.requestPing(tid, RoutingTable.get().localNode.id)
-    await this.sendMessage(port, addr, messageFC)
+    await this.sendMessage(port, address, messageFC)
+  }
+
+  private async resolveAddress(address: string): Promise<string> {
+    if (NetUtil.isIPv4Str(address)) return address
+
+    const addresses = await Deno.resolveDns(address, 'A')
+    const resolved = addresses[0]
+    if (!resolved) throw new Error(`could not resolve IPv4 address for ${address}`)
+    return resolved
   }
 }

@@ -63,6 +63,20 @@ Deno.test('ErrorHandler - 合法 TID 有错误详情时完成事务', async () =
   assertEquals(sender.sentMessages.length, 0)
 })
 
+Deno.test('ErrorHandler - 来源不匹配时保留事务并丢弃错误', async () => {
+  const tid = mgr.create({ type: QueryType.PING, addr: REMOTE_ADDR, port: REMOTE_PORT })
+
+  await handler.handle(
+    { t: tid, y: MessageType.ERROR, e: [202, 'spoofed error'] },
+    '8.8.8.8',
+    REMOTE_PORT,
+    new MockSender(),
+  )
+
+  assertEquals(mgr.isValid(tid), true)
+  mgr.finish(tid)
+})
+
 Deno.test('ErrorHandler - 合法 TID 无错误字段时完成事务（unknown error）', async () => {
   const tid = mgr.create({ type: QueryType.FIND_NODE, addr: REMOTE_ADDR, port: REMOTE_PORT })
   assertEquals(mgr.isValid(tid), true)

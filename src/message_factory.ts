@@ -11,6 +11,108 @@ import logger from '~/src/util/log.ts'
 // defaults when handling untrusted datagrams.
 const MAX_KRPC_MESSAGE_BYTES = 65_507
 const MAX_KRPC_MESSAGE_DEPTH = 16
+const MAX_TRANSACTION_ID_BYTES = 64
+const textEncoder = new TextEncoder()
+
+type UnknownDictionary = Record<string, unknown>
+
+function isDictionary(value: unknown): value is UnknownDictionary {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function toProtocolBytes(value: unknown): Uint8Array | undefined {
+  if (value instanceof Uint8Array) return value
+  if (typeof value === 'string') return textEncoder.encode(value)
+  return undefined
+}
+
+function normalizeMessage(value: unknown): Message | undefined {
+  if (!isDictionary(value)) return undefined
+
+  const { t, y } = value
+  if (
+    typeof t !== 'string' || textEncoder.encode(t).length === 0 ||
+    textEncoder.encode(t).length > MAX_TRANSACTION_ID_BYTES
+  ) {
+    return undefined
+  }
+
+  if (y === MessageType.QUERY) {
+    if (typeof value.q !== 'string' || !isDictionary(value.a)) return undefined
+
+    const id = toProtocolBytes(value.a.id)
+    if (!id) return undefined
+
+    const target = value.a.target === undefined ? undefined : toProtocolBytes(value.a.target)
+    const infoHash = value.a.info_hash === undefined ? undefined : toProtocolBytes(value.a.info_hash)
+    if (value.a.target !== undefined && !target) return undefined
+    if (value.a.info_hash !== undefined && !infoHash) return undefined
+    if (value.a.implied_port !== undefined && typeof value.a.implied_port !== 'number') return undefined
+    if (value.a.port !== undefined && typeof value.a.port !== 'number') return undefined
+    if (value.a.token !== undefined && typeof value.a.token !== 'string') return undefined
+
+    return {
+      t,
+      y,
+      q: value.q as QueryType,
+      a: {
+        id,
+        target,
+        info_hash: infoHash,
+        implied_port: value.a.implied_port,
+        port: value.a.port,
+        token: value.a.token,
+      },
+    }
+  }
+
+  if (y === MessageType.RESPONSE) {
+    if (!isDictionary(value.r)) return undefined
+
+    const id = toProtocolBytes(value.r.id)
+    if (!id) return undefined
+
+    const nodes = value.r.nodes === undefined ? undefined : toProtocolBytes(value.r.nodes)
+    if (value.r.nodes !== undefined && !nodes) return undefined
+
+    let values: Uint8Array[] | undefined
+    if (value.r.values !== undefined) {
+      if (!Array.isArray(value.r.values)) return undefined
+      values = []
+      for (const entry of value.r.values) {
+        const bytes = toProtocolBytes(entry)
+        if (!bytes) return undefined
+        values.push(bytes)
+      }
+    }
+
+    if (value.r.token !== undefined && typeof value.r.token !== 'string') return undefined
+
+    return {
+      t,
+      y,
+      r: {
+        id,
+        nodes,
+        values,
+        token: value.r.token,
+      },
+    }
+  }
+
+  if (y === MessageType.ERROR) {
+    if (
+      !Array.isArray(value.e) || value.e.length !== 2 || !Number.isSafeInteger(value.e[0]) ||
+      typeof value.e[1] !== 'string'
+    ) {
+      return undefined
+    }
+
+    return { t, y, e: [value.e[0] as number, value.e[1]] }
+  }
+
+  return undefined
+}
 
 function toBencodeValue(value: unknown): BencodeValue {
   if (typeof value === 'string' || value instanceof Uint8Array) return value
@@ -174,13 +276,7 @@ export default class MessageFactory {
         }),
       )
 
-      if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) return undefined
-
-      const message = decoded as Message
-
-      if (!message || !message.y || !message.t) return undefined
-
-      return message
+      return normalizeMessage(decoded)
     } catch (e) {
       logger.error(`[Bencode] decode message error: ${e}`)
       return undefined

@@ -22,30 +22,35 @@ export default class ResponseHandler implements MessageHandler {
 
     // check tid is valid
     if (!TransactionManager.get().isValid(tid)) {
-      logger.warn(`[${tid}}]received a invalid tid: ${tid}, drop the message, which from ${addr}:${port}`)
+      logger.warn(`[${tid}] received an invalid tid, drop the message from ${addr}:${port}`)
+      return
+    }
+
+    // get the request message from transaction; if not found, drop — the message was not requested by this node
+    const request = TransactionManager.get().getData(tid)
+    if (!request) {
+      logger.warn(
+        `[${tid}] received an unsolicited response, drop the message from ${addr}:${port}`,
+      )
+      return
+    }
+
+    if (request.addr !== addr || request.port !== port) {
+      logger.warn(
+        `[${tid}] response source ${addr}:${port} does not match request target ${request.addr}:${request.port}`,
+      )
       return
     }
 
     // check response node id
-    if (!Id.isValidId(data?.id)) {
-      logger.warn(`[${tid}}]response without node id or invalid, drop the message, which from ${addr}:${port}`)
+    const responseNodeId = data?.id
+    if (!(responseNodeId instanceof Uint8Array) || !Id.isValidId(responseNodeId)) {
+      logger.warn(`[${tid}] response has no valid node id, drop the message from ${addr}:${port}`)
       return
     }
 
-    const responseNodeId = data?.id!
-
-    // get the request message from transaction; if not found, drop — the message was not requested by this node
-    const request = TransactionManager.get().getData(tid)
-
-    // finish the transaction
+    // finish the transaction only after the response source and base shape are verified
     TransactionManager.get().finish(response.t)
-
-    if (!request) {
-      logger.warn(
-        `[${tid}}]received a response which is not requested by this node, drop the message, which from ${addr}:${port}`,
-      )
-      return
-    }
 
     const respNode = new Node(Id.fromUnit8Array(responseNodeId), port, addr)
 

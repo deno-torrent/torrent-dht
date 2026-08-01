@@ -10,7 +10,7 @@ export default class ErrorResponseHandler implements MessageHandler {
   }
 
   handle(response: Message, address: string, port: number, _client: Sender): Promise<void> {
-    logger.warn(`[<======ERROR] received invalid error from ${address}:${port}`)
+    logger.warn(`[<======ERROR] received error response from ${address}:${port}`)
 
     const { e: error, t: tid } = response
 
@@ -20,7 +20,13 @@ export default class ErrorResponseHandler implements MessageHandler {
       return Promise.resolve()
     }
 
-    // finish transaction
+    const request = TransactionManager.get().getData(tid)
+    if (!request || request.addr !== address || request.port !== port) {
+      logger.warn(`[${tid}] error source ${address}:${port} does not match the original request target`)
+      return Promise.resolve()
+    }
+
+    // finish transaction only after verifying the source endpoint
     TransactionManager.get().finish(tid)
 
     if (error) {

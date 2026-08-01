@@ -7,7 +7,7 @@ import Node from '~/src/node.ts'
 import Peer from '~/src/peer.ts'
 import RoutingTable from '~/src/routing_table.ts'
 import logger from '~/src/util/log.ts'
-import { BytesUtil } from '@deno-torrent/toolkit'
+import { BytesUtil, NetUtil } from '@deno-torrent/toolkit'
 
 export default class RequestHandler implements MessageHandler {
   getHandleMessageType(): MessageType {
@@ -43,6 +43,11 @@ export default class RequestHandler implements MessageHandler {
         break
       default:
         logger.error(`unknown query type: ${type}`)
+        await sender.sendMessage(
+          port,
+          addr,
+          MessageFactory.responseError(tid, ErrorType.METHOD_UNKNOWN, 'unknown method'),
+        )
     }
   }
 
@@ -106,6 +111,16 @@ export default class RequestHandler implements MessageHandler {
     logger.info(`[<======QUERY-GET_PEERS-${reqMsg.q}] received from ${reqNode.addr}:${reqNode.port}`)
 
     const infoHash = reqMsg.a?.info_hash as Uint8Array
+    if (!Id.isValidId(infoHash)) {
+      logger.error(`[${tid}]: invalid info hash: ${infoHash}`)
+      await sender.sendMessage(
+        reqNode.port,
+        reqNode.addr,
+        MessageFactory.responseError(tid, ErrorType.PROTOCOL, 'invalid info hash'),
+      )
+      return
+    }
+
     const infoHashHex = BytesUtil.bytes2HexStr(infoHash)
     const peers = InfoHashManager.get().find(infoHashHex)
     const token = InfoHashManager.get().findToken(infoHashHex)
@@ -153,7 +168,18 @@ export default class RequestHandler implements MessageHandler {
       return
     }
 
-    if (!port) {
+    const impliedPort = reqMsg.a?.implied_port ?? 0
+    if (impliedPort !== 0 && impliedPort !== 1) {
+      logger.error(`[${tid}]: invalid implied_port: ${impliedPort}`)
+      await sender.sendMessage(
+        reqNode.port,
+        reqNode.addr,
+        MessageFactory.responseError(tid, ErrorType.PROTOCOL, 'invalid implied_port'),
+      )
+      return
+    }
+
+    if (impliedPort === 0 && (!NetUtil.isNetPort(port) || port === 0)) {
       logger.error(`[${tid}]: invalid port: ${port}`)
       await sender.sendMessage(
         reqNode.port,
@@ -177,8 +203,6 @@ export default class RequestHandler implements MessageHandler {
 
     // 0 or 1, 1 means use the sender port, ignore the port in the request. 0 means use the port in the request as the download port
     // if the node is behind a NAT, the sender port is the public port, the download port is the private port, at this time, the implied_port should be 1
-    const impliedPort = (reqMsg.a?.implied_port as number) || 0
-
     // validate the token of the info hash
     const tokenOfInfoHash = InfoHashManager.get().findToken(BytesUtil.bytes2HexStr(infoHash))
 

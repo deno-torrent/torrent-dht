@@ -71,6 +71,38 @@ Deno.test('ResponseHandler - ping 响应将节点加入路由表', async () => {
   assertEquals(mgr.isValid(tid), false)
 })
 
+Deno.test('ResponseHandler - 来源地址不匹配时保留事务并丢弃响应', async () => {
+  const handler = new ResponseHandler()
+  const tid = mgr.create({ type: QueryType.PING, addr: REMOTE_ADDR, port: REMOTE_PORT })
+  const beforeCount = RoutingTable.get().nodeCount
+
+  await handler.handle(
+    { t: tid, y: MessageType.RESPONSE, r: { id: makeInfoHash('spoofed-response-node') } },
+    '8.8.8.8',
+    REMOTE_PORT,
+    new MockSender(),
+  )
+
+  assertEquals(mgr.isValid(tid), true)
+  assertEquals(RoutingTable.get().nodeCount, beforeCount)
+  mgr.finish(tid)
+})
+
+Deno.test('ResponseHandler - 来源端口不匹配时保留事务并丢弃响应', async () => {
+  const handler = new ResponseHandler()
+  const tid = mgr.create({ type: QueryType.PING, addr: REMOTE_ADDR, port: REMOTE_PORT })
+
+  await handler.handle(
+    { t: tid, y: MessageType.RESPONSE, r: { id: makeInfoHash('wrong-port-response-node') } },
+    REMOTE_ADDR,
+    REMOTE_PORT + 1,
+    new MockSender(),
+  )
+
+  assertEquals(mgr.isValid(tid), true)
+  mgr.finish(tid)
+})
+
 // ─── find_node 响应 ───────────────────────────────────────────────────────────
 
 Deno.test('ResponseHandler - find_node 响应解析 nodes 并加入路由表', async () => {
