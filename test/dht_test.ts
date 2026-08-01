@@ -17,7 +17,7 @@ const TEST_PORT = 59999
 let dht: DHT | undefined
 let skipReason: string | undefined
 try {
-  dht = await DHT.listen(TEST_PORT)
+  dht = await DHT.listen({ port: TEST_PORT, publicAddress: '127.0.0.1', autoBootstrap: false })
 } catch (e) {
   skipReason = `DHT.listen() 初始化失败（环境可能缺少 ifconfig）: ${(e as Error).message}`
 }

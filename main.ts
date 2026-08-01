@@ -3,7 +3,7 @@ import { encodeHex } from '@std/encoding/hex'
 import DHT from '~/src/dht.ts'
 import logger from '~/src/util/log.ts'
 
-const dht = await DHT.listen(63333)
+const dht = await DHT.listen({ port: 63333 })
 
 setInterval(async () => {
   if (dht.routingTable.nodeCount < 8) {

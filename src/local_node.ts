@@ -22,10 +22,12 @@ export default class LocalNode extends Node {
    * @param port the port of the node
    * @returns the local node
    */
-  static async createLocalNode(port: number): Promise<LocalNode> {
-    // generate a relatively stable nodeId, through the mac address
-    const idByMacAddr = Id.createIdByMacAddr()
-    const addr = await getIP()
-    return new LocalNode(idByMacAddr, port, addr)
+  static async createLocalNode(
+    port: number,
+    options: { publicAddress?: string; nodeId?: Id } = {},
+  ): Promise<LocalNode> {
+    const id = options.nodeId ?? Id.createIdByMacAddr()
+    const addr = options.publicAddress ?? await getIP()
+    return new LocalNode(id, port, addr)
   }
 }

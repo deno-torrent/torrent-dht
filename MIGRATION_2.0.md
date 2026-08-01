@@ -82,6 +82,27 @@ discovery performs the BEP 5 ping-before-replace flow automatically.
 KRPC send methods now reject when UDP transmission fails. The associated transaction is released before rejection, so
 callers should handle the returned promise rather than relying only on logs.
 
+## DHT listen options
+
+`DHT.listen()` now accepts an options object. This separates the local bind interface from the IPv4 address advertised
+to other DHT nodes and allows restricted deployments to bypass ipify:
+
+```ts
+// 1.x
+await DHT.listen(6881, bootstrapNodes)
+
+// 2.0
+await DHT.listen({
+  port: 6881,
+  bootstrapNodes,
+  bindAddress: '0.0.0.0',
+  publicAddress: '203.0.113.10', // omit only when automatic discovery is desired
+})
+```
+
+`nodeId` can be supplied to bypass MAC-derived ID creation, and `autoBootstrap: false` disables construction-time
+bootstrap requests.
+
 ## Runtime and permissions
 
 Version 2 supports the current stable Deno 2.x line. Toolkit 2.0 obtains MAC addresses through

@@ -8,6 +8,25 @@ import RoutingTable from '~/src/routing_table.ts'
 import logger from '~/src/util/log.ts'
 import { NetUtil } from '@deno-torrent/toolkit'
 
+/** Bootstrap endpoint used to join the public DHT. */
+export type BootstrapNode = { addr: string; port: number }
+
+/** Configuration for one isolated DHT node. */
+export type DHTOptions = {
+  /** UDP port to bind and advertise. */
+  port: number
+  /** Local IPv4 interface to bind. Defaults to all interfaces. */
+  bindAddress?: string
+  /** IPv4 address advertised in compact node records. Omit to discover it through ipify. */
+  publicAddress?: string
+  /** Stable node ID. Omit to derive one from a network interface MAC address. */
+  nodeId?: Id
+  /** Bootstrap endpoints. Defaults to the public router list. */
+  bootstrapNodes?: BootstrapNode[]
+  /** Start bootstrap requests during construction. Defaults to true. */
+  autoBootstrap?: boolean
+}
+
 /**
  * the host node of the dht network
  */
@@ -30,12 +49,13 @@ export default class DHT {
       port: 6881,
     },
   ]
-  #bootstrapNodes: { addr: string; port: number }[] // the bootstrap nodes
+  #bootstrapNodes: BootstrapNode[] // the bootstrap nodes
   #krpc: KRPC // the krpc protocol
   readonly #routingTable: RoutingTable
   readonly #infoHashManager: InfoHashManager
 
-  private constructor(port: number, localNode: LocalNode, bootstrapNodes: { addr: string; port: number }[]) {
+  private constructor(options: DHTOptions, localNode: LocalNode, bootstrapNodes: BootstrapNode[]) {
+    const { port, bindAddress = '0.0.0.0', autoBootstrap = true } = options
     // check the port
     if (!NetUtil.isNetPort(port)) {
       throw new Error('invalid port, should be in range [0, 65535], but got ' + port)
@@ -64,10 +84,12 @@ export default class DHT {
       this.#infoHashManager,
       transactionManager,
       tokenManager,
+      bindAddress,
     )
 
-    // ping the bootstrap nodes
-    void this.pingBootstrapNodes().catch((error) => logger.error(`bootstrap failed: ${error}`))
+    if (autoBootstrap) {
+      void this.pingBootstrapNodes().catch((error) => logger.error(`bootstrap failed: ${error}`))
+    }
   }
 
   /** Routing state owned exclusively by this DHT instance. */
@@ -86,20 +108,24 @@ export default class DHT {
    * @param bootstrapNodes the bootstrap nodes
    * @returns
    */
-  static async listen(
-    port: number,
-    bootstrapNodes: { addr: string; port: number }[] = DHT.#DEFAULT_BOOTSTRAP_NODES,
-  ): Promise<DHT> {
+  static async listen(options: DHTOptions): Promise<DHT> {
+    if (!options || typeof options !== 'object') throw new TypeError('DHT options are required')
+    const { port, bindAddress = '0.0.0.0', publicAddress, nodeId } = options
+    const bootstrapNodes = options.bootstrapNodes ?? DHT.#DEFAULT_BOOTSTRAP_NODES
     if (!NetUtil.isNetPort(port)) {
       throw new RangeError(`port must be in range [0, 65535], but got ${port}`)
+    }
+    if (!NetUtil.isIPv4Str(bindAddress)) throw new TypeError(`bindAddress must be an IPv4 address: ${bindAddress}`)
+    if (publicAddress !== undefined && !NetUtil.isIPv4Str(publicAddress)) {
+      throw new TypeError(`publicAddress must be an IPv4 address: ${publicAddress}`)
     }
     if (!bootstrapNodes || bootstrapNodes.length === 0) {
       throw new TypeError('at least one bootstrap node is required')
     }
 
-    const localNdoe = await LocalNode.createLocalNode(port)
+    const localNode = await LocalNode.createLocalNode(port, { publicAddress, nodeId })
 
-    return new DHT(port, localNdoe, bootstrapNodes)
+    return new DHT(options, localNode, [...bootstrapNodes])
   }
 
   /**

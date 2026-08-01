@@ -37,6 +37,7 @@ function makeContext(probeTimeoutMs = 20) {
     infoHashManager,
     transactionManager,
     tokenManager,
+    '0.0.0.0',
     transport,
     probeTimeoutMs,
   )

@@ -15,6 +15,7 @@
 
 // 主入口
 export { default as DHT } from '~/src/dht.ts'
+export type { BootstrapNode, DHTOptions } from '~/src/dht.ts'
 
 // 核心数据模型
 export { default as Id } from '~/src/id.ts'

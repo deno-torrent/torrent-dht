@@ -44,6 +44,7 @@ export class KRPC implements Sender {
     private readonly transactionManager: TransactionManager<Request>,
     infoHashManager: InfoHashManager,
     tokenManager: TokenManager,
+    bindAddress: string,
     udp?: DatagramTransport,
     private readonly probeTimeoutMs = NODE_PROBE_TIMEOUT_MS,
   ) {
@@ -67,7 +68,7 @@ export class KRPC implements Sender {
       Deno.listenDatagram({
         port: this.#port,
         transport: 'udp',
-        hostname: '0.0.0.0', // listen on all interfaces
+        hostname: bindAddress,
       })
 
     // async handle response
@@ -84,6 +85,7 @@ export class KRPC implements Sender {
     infoHashManager: InfoHashManager,
     transactionManager: TransactionManager<Request>,
     tokenManager: TokenManager,
+    bindAddress = '0.0.0.0',
     udp?: DatagramTransport,
     probeTimeoutMs?: number,
   ) {
@@ -91,7 +93,17 @@ export class KRPC implements Sender {
     if (probeTimeoutMs !== undefined && (!Number.isFinite(probeTimeoutMs) || probeTimeoutMs <= 0)) {
       throw new RangeError('probeTimeoutMs must be greater than zero')
     }
-    return new KRPC(port, routingTable, transactionManager, infoHashManager, tokenManager, udp, probeTimeoutMs)
+    if (!NetUtil.isIPv4Str(bindAddress)) throw new TypeError(`bindAddress must be an IPv4 address: ${bindAddress}`)
+    return new KRPC(
+      port,
+      routingTable,
+      transactionManager,
+      infoHashManager,
+      tokenManager,
+      bindAddress,
+      udp,
+      probeTimeoutMs,
+    )
   }
 
   /**

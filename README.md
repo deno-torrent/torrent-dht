@@ -33,7 +33,7 @@ Or add to `deno.jsonc`:
 ```ts
 import { DHT } from '@deno-torrent/torrent-dht'
 
-const dht = await DHT.listen(6881)
+const dht = await DHT.listen({ port: 6881 })
 
 setInterval(async () => {
   if (dht.routingTable.nodeCount < 16) {
@@ -59,7 +59,7 @@ deno run -A --unstable-net your_app.ts
 
 | Method                              | Description                                         |
 | ----------------------------------- | --------------------------------------------------- |
-| `DHT.listen(port, bootstrapNodes?)` | Create and start a DHT node, returns `Promise<DHT>` |
+| `DHT.listen(options)`               | Create and start a DHT node, returns `Promise<DHT>` |
 | `dht.pingBootstrapNodes()`          | Send ping + find_node to all bootstrap nodes        |
 | `dht.sendFindNodeRequest()`         | Send find_node to known routing table nodes         |
 | `dht.sendGetPeersRequest(infoHash)` | Send get_peers to the closest known nodes           |
@@ -125,10 +125,20 @@ environment initialization failures reject `DHT.listen()` with an `Error`. Publi
 limited to 10 seconds, so environments that block HTTPS fail instead of leaving startup pending. Always release a
 successfully created node:
 
+Set `publicAddress` to skip ipify entirely, and `bindAddress` to choose the local IPv4 interface:
+
+```ts
+const dht = await DHT.listen({
+  port: 6881,
+  bindAddress: '0.0.0.0',
+  publicAddress: '203.0.113.10',
+})
+```
+
 ```ts
 let dht: DHT | undefined
 try {
-  dht = await DHT.listen(6881)
+  dht = await DHT.listen({ port: 6881 })
   // use dht
 } catch (error) {
   if (error instanceof RangeError) {
@@ -148,7 +158,7 @@ try {
 - Routing and peer state is held in process memory and is not persisted.
 - Peer endpoints are deduplicated, expire after 30 minutes without refresh, and are bounded to 100 peers per info hash
   and 10,000 info hashes per process.
-- The routing table and managers are process-wide singletons; use one active DHT node per Deno worker.
+- Each DHT instance owns independent routing, peer, transaction, and token state.
 - **Intentional non-goal:** this package is a BEP-5 DHT component, not a complete BitTorrent client, tracker, storage
   engine, or IPv6 DHT implementation.
 
@@ -190,7 +200,7 @@ import { DHT } from 'jsr:@deno-torrent/torrent-dht@^2.0.0'
 ```ts
 import { DHT } from '@deno-torrent/torrent-dht'
 
-const dht = await DHT.listen(6881)
+const dht = await DHT.listen({ port: 6881 })
 
 setInterval(async () => {
   if (dht.routingTable.nodeCount < 16) {
@@ -215,7 +225,7 @@ deno run -A --unstable-net your_app.ts
 
 | 方法                                | 说明                                     |
 | ----------------------------------- | ---------------------------------------- |
-| `DHT.listen(port, bootstrapNodes?)` | 创建并启动 DHT 节点，返回 `Promise<DHT>` |
+| `DHT.listen(options)`               | 创建并启动 DHT 节点，返回 `Promise<DHT>` |
 | `dht.pingBootstrapNodes()`          | 向所有引导节点发送 ping + find_node      |
 | `dht.sendFindNodeRequest()`         | 向路由表中已知节点发送 find_node         |
 | `dht.sendGetPeersRequest(infoHash)` | 向最近节点发送 get_peers 请求            |
@@ -278,7 +288,7 @@ K-bucket 满时会先 ping 最久未活动节点；有响应则保留旧节点�
 ```ts
 let dht: DHT | undefined
 try {
-  dht = await DHT.listen(6881)
+  dht = await DHT.listen({ port: 6881 })
   // 使用 dht
 } catch (error) {
   if (error instanceof RangeError) {
@@ -298,7 +308,7 @@ try {
 - 路由与 Peer 状态只保存在进程内存中，不提供持久化。
 - Peer endpoint 会去重，连续 30 分钟未刷新即过期；每个 info hash 最多保留 100 个 Peer，每个进程最多保留 10,000 个 info
   hash。
-- 路由表和管理器是进程级单例；每个 Deno worker 只应运行一个活动 DHT 节点。
+- 每个 DHT 实例独立持有路由、Peer、事务和 token 状态。
 - **明确非目标：**本库是 BEP-5 DHT 组件，不是完整的 BitTorrent 客户端、Tracker、存储引擎或 IPv6 DHT 实现。
 
 ## 从 1.x 迁移
