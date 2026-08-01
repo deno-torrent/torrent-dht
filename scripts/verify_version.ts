@@ -7,12 +7,14 @@ export function readConfiguredVersion(configText: string): string {
   return match[1]
 }
 
-/** Require a release tag to exactly match the package version. */
+/** Require a `v`-prefixed release tag to match the package version. */
 export function verifyReleaseVersion(configText: string, releaseTag: string): string {
   if (!releaseTag) throw new TypeError('release tag is required')
+  if (!releaseTag.startsWith('v')) throw new Error('release tag must use a v prefix')
 
   const version = readConfiguredVersion(configText)
-  if (releaseTag !== version) {
+  const tagVersion = releaseTag.slice(1)
+  if (tagVersion !== version) {
     throw new Error(`release tag ${releaseTag} does not match deno.jsonc version ${version}`)
   }
 

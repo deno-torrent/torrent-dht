@@ -1,7 +1,7 @@
 # Release Guide
 
-`deno.jsonc` is the only source of truth for the package version. Release tags use the exact SemVer value without a `v`
-prefix; for example, version `2.0.0` must use tag `2.0.0`.
+`deno.jsonc` is the only source of truth for the package version. Release tags must use a `v` prefix; for example,
+version `2.0.0` uses tag `v2.0.0`.
 
 ## Prepare
 
@@ -14,7 +14,7 @@ prefix; for example, version `2.0.0` must use tag `2.0.0`.
    deno task lint
    deno task check
    deno task test
-   deno task verify:version 2.0.0
+   deno task verify:version v2.0.0
    deno publish --dry-run
    ```
 
@@ -22,7 +22,7 @@ prefix; for example, version `2.0.0` must use tag `2.0.0`.
 
 ## Publish
 
-Create a GitHub Release whose tag exactly matches the version in `deno.jsonc`. Publishing the GitHub Release triggers
+Create a GitHub Release whose `v`-prefixed tag matches the version in `deno.jsonc`. Publishing it triggers
 `.github/workflows/publish.yml`, which checks out that tag, repeats every release gate, verifies the version, and then
 publishes to JSR.
 
