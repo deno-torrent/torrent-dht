@@ -17,7 +17,7 @@
   },
   "imports": {
     // JSR 官方库 - deno-torrent 套件
-    "@deno-torrent/bencode": "jsr:@deno-torrent/bencode@^2.0.0",
+    "@deno-torrent/bencode": "jsr:@deno-torrent/bencode@^2.0.1",
     "@deno-torrent/toolkit": "jsr:@deno-torrent/toolkit@^2.0.0",
     // JSR 标准库
     "@std/assert": "jsr:@std/assert@^1.0.0",

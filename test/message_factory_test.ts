@@ -211,6 +211,19 @@ Deno.test('MessageFactory.decode - bencode 2.0 拒绝尾随数据', async () => 
   assertEquals(await MessageFactory.decode(withTrailingByte), undefined)
 })
 
+Deno.test('MessageFactory.decode - 接受 libtorrent 风格的未排序 KRPC 字典', async () => {
+  // Top-level keys are ip, r, t, y, v. Canonical byte order would place v before y.
+  const encoded = new TextEncoder().encode(
+    'd2:ip6:abcdef1:rd2:id20:abcdefghijklmnopqrste1:t2:aa1:y1:r1:v4:LT01e',
+  )
+
+  const decoded = await MessageFactory.decode(encoded)
+
+  assertEquals(decoded?.t, 'aa')
+  assertEquals(decoded?.y, MessageType.RESPONSE)
+  assertEquals(decoded?.r?.id, new TextEncoder().encode('abcdefghijklmnopqrst'))
+})
+
 Deno.test('MessageFactory.decode - 拒绝超过 KRPC UDP 上限的数据', async () => {
   assertEquals(await MessageFactory.decode(new Uint8Array(65_508)), undefined)
 })

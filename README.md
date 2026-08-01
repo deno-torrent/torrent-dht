@@ -110,6 +110,9 @@ Incoming KRPC datagrams are decoded with UDP-size and nesting limits. Malformed 
 or error packets are accepted only when their source IP and port match the original request. Unknown query methods
 receive the BEP-5 `204 Method Unknown` error.
 
+KRPC decoding explicitly accepts dictionaries with non-canonical key order for interoperability with deployed libtorrent
+nodes. Bencode's duplicate-key rejection and all other structural and resource-limit checks remain enabled.
+
 `get_peers` announce tokens are bound to the requester's IP address, rotate every five minutes, and remain valid for at
 most one previous rotation window. Tokens are exposed as opaque `Uint8Array` values and may contain non-UTF-8 bytes. An
 `announce_peer` request without a valid issued token is rejected.

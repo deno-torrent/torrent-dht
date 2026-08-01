@@ -1,7 +1,7 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@deno-torrent/bencode@2": "2.0.0",
+    "jsr:@deno-torrent/bencode@^2.0.1": "2.0.1",
     "jsr:@deno-torrent/toolkit@2": "2.0.0",
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/bytes@1": "1.0.6",
@@ -11,8 +11,8 @@
     "jsr:@std/internal@^1.0.12": "1.0.14"
   },
   "jsr": {
-    "@deno-torrent/bencode@2.0.0": {
-      "integrity": "3dc2c69aed046e807d7671893df175f71ab421ebdd748d8be0ab241f61c7bea6"
+    "@deno-torrent/bencode@2.0.1": {
+      "integrity": "02a81ef9d7a20df727f40b579b602409faae2e787cfccab7068756427b52825d"
     },
     "@deno-torrent/toolkit@2.0.0": {
       "integrity": "fae0e13a1cdb4be165aa637f1adf8bdc11155217da2bcc2b30269a7a4c566382",
@@ -45,7 +45,7 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@deno-torrent/bencode@2",
+      "jsr:@deno-torrent/bencode@^2.0.1",
       "jsr:@deno-torrent/toolkit@2",
       "jsr:@std/assert@1",
       "jsr:@std/bytes@1",

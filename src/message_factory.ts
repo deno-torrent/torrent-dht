@@ -278,6 +278,10 @@ export default class MessageFactory {
         bdecode(data, {
           maxBytes: MAX_KRPC_MESSAGE_BYTES,
           maxDepth: MAX_KRPC_MESSAGE_DEPTH,
+          // Mainline DHT implementations may emit otherwise valid dictionaries
+          // whose keys are not canonical byte-order. Duplicate keys and all
+          // other decoder validation remain enforced by bencode.
+          allowUnsortedKeys: true,
         }),
       )
 
