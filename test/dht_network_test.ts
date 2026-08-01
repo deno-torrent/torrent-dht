@@ -29,7 +29,6 @@ const BOOTSTRAP_NODES = [
   { addr: 'dht.transmissionbt.com', port: 6881 },
   { addr: 'router.bittorrent.com', port: 6881 },
   { addr: 'router.utorrent.com', port: 6881 },
-  { addr: 'router.bitcomet.com', port: 6881 },
 ]
 
 // ─── 模块级初始化（同 dht_test.ts 的模式） ───────────────────────────────────

@@ -129,16 +129,21 @@ export default class DHT {
   }
 
   /**
-   * ping the bootstrap nodes
+   * Contact every configured bootstrap endpoint.
+   *
+   * A DNS or UDP failure from one endpoint is logged and does not prevent the
+   * remaining endpoints from being attempted.
    */
   async pingBootstrapNodes(): Promise<void> {
     logger.info(`start pingBootstrapNodes`)
     for (const bootstrapNode of this.#bootstrapNodes) {
       logger.info(`ping the bootstrap node ${bootstrapNode.addr}:${bootstrapNode.port}`)
-      // async ping the bootstrap node
-      // TODO pre resolve dns of the bootstrap node, to improve the performance
-      await this.#krpc.sendPingBootrapNodesRequest(bootstrapNode)
-      await this.#krpc.sendFindNodeRequest(bootstrapNode.port, bootstrapNode.addr, Id.random())
+      try {
+        await this.#krpc.sendPingBootrapNodesRequest(bootstrapNode)
+        await this.#krpc.sendFindNodeRequest(bootstrapNode.port, bootstrapNode.addr, Id.random())
+      } catch (error) {
+        logger.warn(`bootstrap node ${bootstrapNode.addr}:${bootstrapNode.port} failed: ${error}`)
+      }
     }
   }
 

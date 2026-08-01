@@ -9,6 +9,7 @@
  */
 import { assertEquals } from '@std/assert'
 import DHT from '../src/dht.ts'
+import Id from '../src/id.ts'
 import { sha1 } from '../src/util/hash.ts'
 
 const TEST_PORT = 59999
@@ -103,6 +104,30 @@ Deno.test({
   sanitizeOps: false,
   async fn() {
     await dht!.pingBootstrapNodes()
+  },
+})
+
+Deno.test({
+  name: 'DHT.pingBootstrapNodes - 单个入口 DNS 失败不会中止引导流程',
+  sanitizeResources: false,
+  sanitizeOps: false,
+  async fn() {
+    const resilientDht = await DHT.listen({
+      port: 0,
+      publicAddress: '127.0.0.1',
+      nodeId: Id.random(),
+      bootstrapNodes: [
+        { addr: 'does-not-exist.invalid', port: 6881 },
+        { addr: '127.0.0.1', port: 9 },
+      ],
+      autoBootstrap: false,
+    })
+
+    try {
+      await resilientDht.pingBootstrapNodes()
+    } finally {
+      resilientDht.close()
+    }
   },
 })
 

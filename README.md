@@ -95,8 +95,8 @@ deno task test:network
 
 Both optional tasks require network access. `test:network` also depends on public DHT bootstrap nodes and can fail when
 UDP traffic or those nodes are unavailable; it is intentionally not part of the default CI gate. To tolerate lossy
-networks, the test retries five maintained public bootstrap endpoints for up to 120 seconds, so allow roughly three
-minutes for the complete task.
+networks, the test retries four maintained public bootstrap endpoints for up to 120 seconds, and an unavailable endpoint
+does not stop the remaining attempts. Allow roughly three minutes for the complete task.
 
 ## Development
 
