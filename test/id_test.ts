@@ -95,3 +95,8 @@ Deno.test('Id.toIntSting - 返回非空十进制整数字符串', () => {
   assertEquals(str.length > 0, true)
   assertEquals(/^\d+$/.test(str), true)
 })
+
+Deno.test('Id.toIntString - 正确拼写别名与旧方法结果一致', () => {
+  const id = Id.fromUnit8Array(new Uint8Array(20).fill(0x01))
+  assertEquals(id.toIntString(), id.toIntSting())
+})

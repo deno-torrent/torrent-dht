@@ -6,10 +6,12 @@ import { getIP } from '~/src/util/net.ts'
  * LocalNode must be a Node, and it contains the node's routing table and file info hashs
  */
 export default class LocalNode extends Node {
+  /** Create a local DHT node. */
   constructor(id: Id, port: number, addr: string) {
     super(id, port, addr)
   }
 
+  /** Local nodes remain active for the lifetime of the instance. */
   override isActive(): boolean {
     // for local node, it is always active
     return true

@@ -5,8 +5,10 @@ import { randomSha1, sha1 } from '~/src/util/hash.ts'
  * node's id or infohash, 20 bytes sha1 hash
  */
 export default class Id {
-  static readonly BYTES_LENGTH = 20 // max size of the id in bytes
-  static readonly BIT_LENGTH = Id.BYTES_LENGTH * 8 // max size of the id in bits
+  /** Length of a DHT node ID or info hash in bytes. */
+  static readonly BYTES_LENGTH = 20
+  /** Length of a DHT node ID or info hash in bits. */
+  static readonly BIT_LENGTH = Id.BYTES_LENGTH * 8
   #value: BitArray // the value of the id
 
   /**
@@ -14,19 +16,26 @@ export default class Id {
    */
   private constructor(value: BitArray) {
     if (value.bytes.length !== Id.BYTES_LENGTH) {
-      throw new Error(`id length must be ${Id.BYTES_LENGTH}, but got ${value.length}`)
+      throw new RangeError(`id length must be ${Id.BYTES_LENGTH}, but got ${value.length}`)
     }
     this.#value = value
   }
 
+  /** Return whether a byte array has the required 20-byte ID length. */
   static isValidId(id?: Uint8Array): boolean {
     return !!(id && id.length === Id.BYTES_LENGTH)
   }
 
+  /**
+   * Create an ID from 20 bytes. The input is copied.
+   *
+   * @throws {RangeError} If `bytes` is not 20 bytes long.
+   */
   static fromUnit8Array(bytes: Uint8Array): Id {
     return new Id(BitArray.fromUint8Array(bytes))
   }
 
+  /** Create a cryptographically random 20-byte ID. */
   static random(): Id {
     return Id.fromUnit8Array(randomSha1())
   }
@@ -54,10 +63,21 @@ export default class Id {
     return BytesUtil.bytes2HexStr(this.#value.bytes)
   }
 
+  /**
+   * Return the ID as an unsigned decimal integer string.
+   *
+   * @deprecated Use {@linkcode toIntString}.
+   */
   toIntSting(): string {
+    return this.toIntString()
+  }
+
+  /** Return the ID as an unsigned decimal integer string. */
+  toIntString(): string {
     return this.#value.toBigInt().toString()
   }
 
+  /** Return the ID as a 160-character binary string. */
   toBinaryString(): string {
     return this.#value.toString()
   }

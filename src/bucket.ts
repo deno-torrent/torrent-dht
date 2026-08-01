@@ -25,15 +25,15 @@ export default class Bucket {
    */
   constructor(capacity: number = 8, start: BitArray, end: BitArray) {
     if (capacity <= 0) {
-      throw new Error('bucket capacity must be greater than 0')
+      throw new RangeError('bucket capacity must be greater than 0')
     }
 
     if (start.greaterThan(end)) {
-      throw new Error(`start must be less than end, start is ${start.toString()}, end is ${end.toString()}`)
+      throw new RangeError(`start must be less than end, start is ${start.toString()}, end is ${end.toString()}`)
     }
 
     if (start.length !== end.length || start.length !== 160) {
-      throw new Error(
+      throw new RangeError(
         `start and end bit length must be same and equal to 160, start length is ${start.length}, end length is ${end.length}`,
       )
     }
@@ -180,6 +180,7 @@ export default class Bucket {
       .slice(0, maxCount)
   }
 
+  /** Return a human-readable summary of bucket occupancy and nodes. */
   toString(): string {
     return `Bucket-filled(${this.size})-remained(${this.#capacity - this.size}):[${
       this.#nodes.map((n) => n.toString()).join(', ')

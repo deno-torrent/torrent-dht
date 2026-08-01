@@ -38,6 +38,10 @@ normal torrent-dht consumers do not need to construct Bencode maps.
 
 Malformed, non-canonical, deeply nested, or oversized KRPC datagrams are now rejected during decoding.
 
+Input validation now uses the built-in `TypeError` and `RangeError` classes where applicable. The misspelled
+`Id.toIntSting()` and `BlackListManager.isBaned()` methods remain available but are deprecated; new code should use
+`Id.toIntString()` and `BlackListManager.isBanned()`.
+
 ## Runtime and permissions
 
 Version 2 supports the current stable Deno 2.x line. Toolkit 2.0 obtains MAC addresses through

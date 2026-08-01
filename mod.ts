@@ -36,3 +36,4 @@ export { default as MessageFactory } from '~/src/message_factory.ts'
 // 工具函数
 export { randomSha1, randomSha1String, sha1, sha1String } from '~/src/util/hash.ts'
 export { Logger } from '~/src/util/log.ts'
+export type { LogLevel } from '~/src/util/log.ts'

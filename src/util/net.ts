@@ -23,7 +23,7 @@ enum RequestType {
 export function extractCompactAddr(bytes: Uint8Array) {
   // 4-byte IP address and 2-byte port number
   if (bytes.length !== COMPAT_ADDR_V4_LEN) {
-    throw new Error(`bytes length must be ${COMPAT_ADDR_V4_LEN}, but got ${bytes.length}`)
+    throw new RangeError(`bytes length must be ${COMPAT_ADDR_V4_LEN}, but got ${bytes.length}`)
   }
 
   const ipBytes = bytes.slice(0, 4)
@@ -51,7 +51,7 @@ export function packageCompactAddr(addr: string, port: number) {
 export function extractCompactNode(bytes: Uint8Array) {
   // Compact IP-address/port info,20-byte Node ID followed by 4-byte IP address and 2-byte port number
   if (bytes.length !== COMPAT_NODE_LEN) {
-    throw new Error(`bytes length must be 26, but got ${bytes.length}`)
+    throw new RangeError(`bytes length must be 26, but got ${bytes.length}`)
   }
 
   const idBytes = bytes.slice(0, 20)

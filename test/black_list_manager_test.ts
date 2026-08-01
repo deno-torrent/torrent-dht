@@ -28,3 +28,9 @@ Deno.test('BlackListManager - 重复封禁同一 IP 不报错', () => {
   mgr.ban('5.5.5.5') // 第二次封禁
   assertEquals(mgr.isBaned('5.5.5.5'), true)
 })
+
+Deno.test('BlackListManager.isBanned - 正确拼写别名与旧方法一致', () => {
+  const manager = new BlackListManager()
+  manager.ban('192.0.2.1')
+  assertEquals(manager.isBanned('192.0.2.1'), manager.isBaned('192.0.2.1'))
+})

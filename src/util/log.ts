@@ -9,7 +9,7 @@
 const LOG_LEVELS = { DEBUG: 0, INFO: 1, WARN: 2, ERROR: 3 } as const
 
 /** 日志级别类型 */
-export type LogLevel = keyof typeof LOG_LEVELS
+export type LogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR'
 
 /**
  * 轻量级日志记录器类
@@ -19,6 +19,8 @@ class Logger {
   #level: LogLevel
 
   /**
+   * Create a logger.
+   *
    * @param name  日志来源名称，将显示在每条日志前缀中
    * @param level 最低输出级别，默认为 INFO
    */

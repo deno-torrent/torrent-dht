@@ -67,6 +67,13 @@ export default class DHT {
     port: number,
     bootstrapNodes: { addr: string; port: number }[] = DHT.#DEFAULT_BOOTSTRAP_NODES,
   ): Promise<DHT> {
+    if (!NetUtil.isNetPort(port)) {
+      throw new RangeError(`port must be in range [0, 65535], but got ${port}`)
+    }
+    if (!bootstrapNodes || bootstrapNodes.length === 0) {
+      throw new TypeError('at least one bootstrap node is required')
+    }
+
     const localNdoe = await LocalNode.createLocalNode(port)
 
     return new DHT(port, localNdoe, bootstrapNodes)
@@ -75,7 +82,7 @@ export default class DHT {
   /**
    * ping the bootstrap nodes
    */
-  async pingBootstrapNodes() {
+  async pingBootstrapNodes(): Promise<void> {
     logger.info(`start pingBootstrapNodes`)
     for (const bootstrapNode of this.#bootstrapNodes) {
       logger.info(`ping the bootstrap node ${bootstrapNode.addr}:${bootstrapNode.port}`)
@@ -86,7 +93,8 @@ export default class DHT {
     }
   }
 
-  async sendFindNodeRequest() {
+  /** Ask every known routing-table node for nodes near a random target. */
+  async sendFindNodeRequest(): Promise<void> {
     logger.info(`start sendFindNodeRequest`)
     // get node from bucket
     for (const bucket of RoutingTable.get().buckets || []) {
@@ -99,7 +107,12 @@ export default class DHT {
     }
   }
 
-  async sendGetPeersRequest(infoHash: Uint8Array) {
+  /**
+   * Ask the closest known nodes for peers associated with an info hash.
+   *
+   * @param infoHash A 20-byte BitTorrent info hash.
+   */
+  async sendGetPeersRequest(infoHash: Uint8Array): Promise<void> {
     logger.info(`start sendGetPeersRequest`)
     if (RoutingTable.get().nodeCount === 0) {
       logger.info(`no nodes in the routing table, skip sendGetPeersRequest`)

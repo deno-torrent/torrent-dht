@@ -109,6 +109,36 @@ receive the BEP-5 `204 Method Unknown` error.
 
 Call `dht.close()` when the node is no longer needed so its UDP socket is released.
 
+## Error Handling
+
+Invalid argument types use `TypeError`; numeric values outside their supported range use `RangeError`. Network and
+environment initialization failures reject `DHT.listen()` with an `Error`. Always release a successfully created node:
+
+```ts
+let dht: DHT | undefined
+try {
+  dht = await DHT.listen(6881)
+  // use dht
+} catch (error) {
+  if (error instanceof RangeError) {
+    console.error('Invalid DHT configuration:', error.message)
+  } else {
+    console.error('Could not start DHT:', error)
+  }
+} finally {
+  dht?.close()
+}
+```
+
+## Limits and Non-goals
+
+- Node IDs and info hashes must be exactly 20 bytes.
+- Compact nodes and peers currently support IPv4 only.
+- Routing and peer state is held in process memory and is not persisted.
+- The routing table and managers are process-wide singletons; use one active DHT node per Deno worker.
+- **Intentional non-goal:** this package is a BEP-5 DHT component, not a complete BitTorrent client, tracker, storage
+  engine, or IPv6 DHT implementation.
+
 ## Migrating from 1.x
 
 Version 2 upgrades `@deno-torrent/bencode` and `@deno-torrent/toolkit` to their 2.0 APIs. The public `BitArray` values
@@ -219,6 +249,35 @@ deno task test:network
 IP、端口与原请求目标一致时才会被接受。未知查询方法会收到 BEP-5 的 `204 Method Unknown` 错误。
 
 节点不再使用时请调用 `dht.close()`，以释放 UDP socket。
+
+## 错误处理
+
+参数类型错误使用 `TypeError`，数值超出允许范围使用 `RangeError`。网络或运行环境初始化失败时，`DHT.listen()` 会以 `Error`
+拒绝。成功创建节点后应始终释放资源：
+
+```ts
+let dht: DHT | undefined
+try {
+  dht = await DHT.listen(6881)
+  // 使用 dht
+} catch (error) {
+  if (error instanceof RangeError) {
+    console.error('DHT 配置无效：', error.message)
+  } else {
+    console.error('DHT 启动失败：', error)
+  }
+} finally {
+  dht?.close()
+}
+```
+
+## 限制与非目标
+
+- 节点 ID 和 info hash 必须恰好为 20 字节。
+- 紧凑节点和 Peer 地址目前仅支持 IPv4。
+- 路由与 Peer 状态只保存在进程内存中，不提供持久化。
+- 路由表和管理器是进程级单例；每个 Deno worker 只应运行一个活动 DHT 节点。
+- **明确非目标：**本库是 BEP-5 DHT 组件，不是完整的 BitTorrent 客户端、Tracker、存储引擎或 IPv6 DHT 实现。
 
 ## 从 1.x 迁移
 

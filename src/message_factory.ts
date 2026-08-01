@@ -267,6 +267,7 @@ export default class MessageFactory {
     return Promise.resolve().then(() => MessageFactory.decodeSync(data))
   }
 
+  /** Decode and validate one KRPC message synchronously. */
   private static decodeSync(data: Uint8Array): Message | undefined {
     try {
       const decoded = fromBencodeValue(

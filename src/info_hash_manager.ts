@@ -1,6 +1,7 @@
 import Peer from '~/src/peer.ts'
 import logger from '~/src/util/log.ts'
 
+/** In-memory association between info hashes, peers, and announce tokens. */
 export default class InfoHashManager {
   static #INSTANCE = new InfoHashManager()
   #infoHashes: Map<string, Set<Peer>> = new Map()
@@ -9,6 +10,7 @@ export default class InfoHashManager {
   #MAX_INFO_HASH_NUM = 1024 * 1024 // the max number of infoHashes
   private constructor() {}
 
+  /** Return the process-wide manager instance. */
   static get(): InfoHashManager {
     return this.#INSTANCE
   }
@@ -27,11 +29,13 @@ export default class InfoHashManager {
     return Array.from(this.#infoHashes.get(infoHash)!)
   }
 
+  /** Return the announce token stored for an info hash. */
   findToken(infoHash: string): string | undefined {
     return this.#tokenMap.get(infoHash)
   }
 
-  addList(infoHash: string, peers: Peer[], token: string) {
+  /** Add multiple peers using the same info hash and token. */
+  addList(infoHash: string, peers: Peer[], token: string): void {
     for (const peer of peers) {
       this.add(infoHash, peer, token)
     }
@@ -42,7 +46,7 @@ export default class InfoHashManager {
    * @param infoHash hex string
    * @param peer Peer
    */
-  add(infoHash: string, peer: Peer, token: string) {
+  add(infoHash: string, peer: Peer, token: string): void {
     if (this.#infoHashes.size >= this.#MAX_INFO_HASH_NUM) {
       logger.error(
         `the number of infoHashes exceeds the limit ${this.#MAX_INFO_HASH_NUM}, ignore ${infoHash}:${peer.addr}:${peer.port}`,
@@ -90,7 +94,7 @@ export default class InfoHashManager {
    * delete all peers of the infoHash
    * @param infoHash hex string
    */
-  remove(infoHash: string) {
+  remove(infoHash: string): void {
     if (!this.#infoHashes.has(infoHash)) {
       logger.warn(`the infoHash ${infoHash} does not exist, delete failed`)
       return
