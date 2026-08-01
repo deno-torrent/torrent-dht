@@ -17,6 +17,7 @@ const localNode = makeLocalNode('response-handler-test', 16001)
 RoutingTable.init(localNode)
 
 const mgr = TransactionManager.get()
+const tokenBytes = (value: string): Uint8Array => new TextEncoder().encode(value)
 
 const REMOTE_ADDR = '5.5.5.5'
 const REMOTE_PORT = 8888
@@ -118,7 +119,7 @@ Deno.test('ResponseHandler - find_node 响应解析 nodes 并加入路由表', a
 
   const sender = new MockSender()
   await handler.handle(
-    { t: tid, y: MessageType.RESPONSE, r: { id: RESP_NODE_ID, nodes: nodesBytes, token: 'gp-token' } },
+    { t: tid, y: MessageType.RESPONSE, r: { id: RESP_NODE_ID, nodes: nodesBytes, token: tokenBytes('gp-token') } },
     REMOTE_ADDR,
     REMOTE_PORT,
     sender,
@@ -171,7 +172,7 @@ Deno.test('ResponseHandler - get_peers 响应含 values 时将 peers 存入 Info
 
   const sender = new MockSender()
   await handler.handle(
-    { t: tid, y: MessageType.RESPONSE, r: { id: RESP_NODE_ID, values: [peerCompact], token: 'gp-token' } },
+    { t: tid, y: MessageType.RESPONSE, r: { id: RESP_NODE_ID, values: [peerCompact], token: tokenBytes('gp-token') } },
     REMOTE_ADDR,
     REMOTE_PORT,
     sender,
@@ -192,7 +193,7 @@ Deno.test('ResponseHandler - get_peers 响应含 nodes 时发起二轮 get_peers
 
   const sender = new MockSender()
   await handler.handle(
-    { t: tid, y: MessageType.RESPONSE, r: { id: RESP_NODE_ID, nodes: nodesBytes, token: 'gp-token' } },
+    { t: tid, y: MessageType.RESPONSE, r: { id: RESP_NODE_ID, nodes: nodesBytes, token: tokenBytes('gp-token') } },
     REMOTE_ADDR,
     REMOTE_PORT,
     sender,
@@ -256,7 +257,11 @@ Deno.test('ResponseHandler - get_peers values 含非 6 字节元素时静默丢�
   // 5 字节 peer，长度无效
   const sender = new MockSender()
   await handler.handle(
-    { t: tid, y: MessageType.RESPONSE, r: { id: RESP_NODE_ID, values: [new Uint8Array(5)], token: 'bad-token' } },
+    {
+      t: tid,
+      y: MessageType.RESPONSE,
+      r: { id: RESP_NODE_ID, values: [new Uint8Array(5)], token: tokenBytes('bad-token') },
+    },
     REMOTE_ADDR,
     REMOTE_PORT,
     sender,
@@ -275,7 +280,7 @@ Deno.test('ResponseHandler - get_peers 空 values 且有 token 时不存储任�
 
   const sender = new MockSender()
   await handler.handle(
-    { t: tid, y: MessageType.RESPONSE, r: { id: RESP_NODE_ID, values: [], token: 'some-token' } },
+    { t: tid, y: MessageType.RESPONSE, r: { id: RESP_NODE_ID, values: [], token: tokenBytes('some-token') } },
     REMOTE_ADDR,
     REMOTE_PORT,
     sender,

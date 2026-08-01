@@ -42,6 +42,18 @@ Input validation now uses the built-in `TypeError` and `RangeError` classes wher
 `Id.toIntSting()` and `BlackListManager.isBaned()` methods remain available but are deprecated; new code should use
 `Id.toIntString()` and `BlackListManager.isBanned()`.
 
+## Opaque KRPC tokens
+
+KRPC announce tokens are now represented as `Uint8Array`, matching BEP 5's opaque byte-string definition. Update calls
+to `MessageFactory.requestAnnouncePeer()`, `MessageFactory.responseGetPeers()`, `InfoHashManager.add()` and
+`sendAnnouncePeerRequest()` to pass bytes rather than text:
+
+```ts
+const token = new TextEncoder().encode(previousStringToken)
+```
+
+Decoded tokens may contain arbitrary non-UTF-8 bytes. Token inputs and stored tokens use copy ownership.
+
 ## Runtime and permissions
 
 Version 2 supports the current stable Deno 2.x line. Toolkit 2.0 obtains MAC addresses through

@@ -12,6 +12,7 @@ import logger from '~/src/util/log.ts'
 const MAX_KRPC_MESSAGE_BYTES = 65_507
 const MAX_KRPC_MESSAGE_DEPTH = 16
 const MAX_TRANSACTION_ID_BYTES = 64
+const MAX_TOKEN_BYTES = 64
 const textEncoder = new TextEncoder()
 
 type UnknownDictionary = Record<string, unknown>
@@ -49,7 +50,9 @@ function normalizeMessage(value: unknown): Message | undefined {
     if (value.a.info_hash !== undefined && !infoHash) return undefined
     if (value.a.implied_port !== undefined && typeof value.a.implied_port !== 'number') return undefined
     if (value.a.port !== undefined && typeof value.a.port !== 'number') return undefined
-    if (value.a.token !== undefined && typeof value.a.token !== 'string') return undefined
+    const token = value.a.token === undefined ? undefined : toProtocolBytes(value.a.token)
+    if (token !== undefined && (token.length === 0 || token.length > MAX_TOKEN_BYTES)) return undefined
+    if (value.a.token !== undefined && !token) return undefined
 
     return {
       t,
@@ -61,7 +64,7 @@ function normalizeMessage(value: unknown): Message | undefined {
         info_hash: infoHash,
         implied_port: value.a.implied_port,
         port: value.a.port,
-        token: value.a.token,
+        token: token?.slice(),
       },
     }
   }
@@ -86,7 +89,9 @@ function normalizeMessage(value: unknown): Message | undefined {
       }
     }
 
-    if (value.r.token !== undefined && typeof value.r.token !== 'string') return undefined
+    const token = value.r.token === undefined ? undefined : toProtocolBytes(value.r.token)
+    if (token !== undefined && (token.length === 0 || token.length > MAX_TOKEN_BYTES)) return undefined
+    if (value.r.token !== undefined && !token) return undefined
 
     return {
       t,
@@ -95,7 +100,7 @@ function normalizeMessage(value: unknown): Message | undefined {
         id,
         nodes,
         values,
-        token: value.r.token,
+        token: token?.slice(),
       },
     }
   }
@@ -181,7 +186,7 @@ export type Message = {
     /** announce_peer：下载端口 */
     port?: number
     /** announce_peer：令牌 */
-    token?: string
+    token?: Uint8Array
   }
   /** 响应数据，仅 response 消息携带 */
   r?: {
@@ -192,7 +197,7 @@ export type Message = {
     /** get_peers 响应：紧凑 Peer 地址列表 */
     values?: Uint8Array[]
     /** get_peers 响应：令牌 */
-    token?: string
+    token?: Uint8Array
   }
   /** 错误信息，仅 error 消息携带：[错误码, 错误描述] */
   e?: [number, string]
@@ -366,7 +371,7 @@ export default class MessageFactory {
     nodeId: Id,
     infoHash: Uint8Array,
     port: number,
-    token: string,
+    token: Uint8Array,
   ): MessageFactory {
     return new MessageFactory({
       t: tid,
@@ -377,7 +382,7 @@ export default class MessageFactory {
         implied_port: 0,
         info_hash: infoHash,
         port,
-        token,
+        token: token.slice(),
       },
     })
   }
@@ -426,7 +431,7 @@ export default class MessageFactory {
    * @param nodes 最近节点列表（可选）
    * @param token 令牌（可选）
    */
-  static responseGetPeers(tid: string, peers?: Peer[], nodes?: Node[], token?: string): MessageFactory {
+  static responseGetPeers(tid: string, peers?: Peer[], nodes?: Node[], token?: Uint8Array): MessageFactory {
     const hasPeers = peers && peers.length > 0
     const hasNodes = nodes && nodes.length > 0
 
@@ -442,7 +447,7 @@ export default class MessageFactory {
         y: MessageType.RESPONSE,
         r: {
           id: RoutingTable.get().localNode.id.bits.bytes,
-          token,
+          token: token?.slice(),
           nodes: concat(compactNodeList),
         },
       })
@@ -452,7 +457,7 @@ export default class MessageFactory {
         y: MessageType.RESPONSE,
         r: {
           id: RoutingTable.get().localNode.id.bits.bytes,
-          token,
+          token: token?.slice(),
           values: peers!.map((peer) => peer.toCompact()),
         },
       })

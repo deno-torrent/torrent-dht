@@ -210,7 +210,7 @@ export class KRPC implements Sender {
    * @param infoHash the info hash of the file
    * @param token the token of the node
    */
-  async sendAnnouncePeerRequest(targetNode: Node, infoHash: Uint8Array, token: string) {
+  async sendAnnouncePeerRequest(targetNode: Node, infoHash: Uint8Array, token: Uint8Array) {
     const address = await this.resolveAddress(targetNode.addr)
     const tid = TransactionManager.get().create({
       type: QueryType.ANNOUNCE_PEER,

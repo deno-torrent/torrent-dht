@@ -1,4 +1,3 @@
-import { encodeHex } from '@std/encoding/hex'
 import { sha1 } from '~/src/util/hash.ts'
 
 const DEFAULT_ROTATION_INTERVAL_MS = 5 * 60 * 1000
@@ -39,13 +38,13 @@ export default class TokenManager {
   }
 
   /** Issue a token that can only be used by the supplied IP address. */
-  issue(address: string): string {
+  issue(address: string): Uint8Array {
     this.#rotateIfNeeded()
     return this.#tokenFor(address, this.#currentSecret)
   }
 
   /** Validate a token against the current or immediately previous secret. */
-  validate(token: string, address: string): boolean {
+  validate(token: Uint8Array, address: string): boolean {
     this.#rotateIfNeeded()
     if (constantTimeEqual(token, this.#tokenFor(address, this.#currentSecret))) return true
     return this.#previousSecret !== undefined &&
@@ -68,21 +67,21 @@ export default class TokenManager {
     this.#rotatedAt = now
   }
 
-  #tokenFor(address: string, secret: Uint8Array): string {
+  #tokenFor(address: string, secret: Uint8Array): Uint8Array {
     const addressBytes = textEncoder.encode(address)
     const input = new Uint8Array(secret.length + addressBytes.length)
     input.set(secret)
     input.set(addressBytes, secret.length)
-    return encodeHex(sha1(input))
+    return sha1(input)
   }
 }
 
-function constantTimeEqual(left: string, right: string): boolean {
+function constantTimeEqual(left: Uint8Array, right: Uint8Array): boolean {
   let difference = left.length ^ right.length
   const length = Math.max(left.length, right.length)
 
   for (let index = 0; index < length; index++) {
-    difference |= (left.charCodeAt(index) || 0) ^ (right.charCodeAt(index) || 0)
+    difference |= (left[index] ?? 0) ^ (right[index] ?? 0)
   }
 
   return difference === 0

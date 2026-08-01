@@ -12,6 +12,8 @@ import LocalNode from '../src/local_node.ts'
 import RoutingTable from '../src/routing_table.ts'
 import { sha1 } from '../src/util/hash.ts'
 
+const tokenBytes = (value: string): Uint8Array => new TextEncoder().encode(value)
+
 // response* 方法需要访问 RoutingTable.get().localNode，提前初始化单例
 const localId = Id.fromUnit8Array(sha1(new TextEncoder().encode('message-factory-test')))
 const localNode = new LocalNode(localId, 16888, '127.0.0.1')
@@ -57,14 +59,15 @@ Deno.test('MessageFactory.requestGetPeers - 消息结构正确', () => {
 
 Deno.test('MessageFactory.requestAnnouncePeer - 消息结构正确', () => {
   const infoHash = sha1(new TextEncoder().encode('announce-test'))
-  const mf = MessageFactory.requestAnnouncePeer('dd', nodeId, infoHash, 7777, 'tok123')
+  const token = tokenBytes('tok123')
+  const mf = MessageFactory.requestAnnouncePeer('dd', nodeId, infoHash, 7777, token)
   const msg = mf.message()
   assertEquals(msg.y, MessageType.QUERY)
   assertEquals(msg.q, QueryType.ANNOUNCE_PEER)
   assertEquals(msg.a?.implied_port, 0)
   assertEquals(msg.a?.port, 7777)
   assertEquals(msg.a?.info_hash, infoHash)
-  assertEquals(msg.a?.token, 'tok123')
+  assertEquals(msg.a?.token, token)
 })
 
 // ─── responseError ───────────────────────────────────────────────────────────
@@ -113,9 +116,23 @@ Deno.test('MessageFactory.responseGetPeers - 有 peers 时返回 values 字段',
 
 Deno.test('MessageFactory.responseGetPeers - 有 nodes 时返回 nodes 字段', () => {
   const n = new Node(Id.random(), 1234, '1.2.3.4')
-  const msg = MessageFactory.responseGetPeers('jj', undefined, [n], 'announce-token').message()
+  const token = tokenBytes('announce-token')
+  const msg = MessageFactory.responseGetPeers('jj', undefined, [n], token).message()
   assertEquals(msg.r?.nodes instanceof Uint8Array, true)
-  assertEquals(msg.r?.token, 'announce-token')
+  assertEquals(msg.r?.token, token)
+})
+
+Deno.test('MessageFactory - opaque binary token survives bencode round trip', async () => {
+  const token = new Uint8Array([0, 255, 128, 1])
+  const encoded = await MessageFactory.requestAnnouncePeer(
+    'tk',
+    Id.random(),
+    new Uint8Array(20),
+    6881,
+    token,
+  ).bencode()
+
+  assertEquals((await MessageFactory.decode(encoded))?.a?.token, token)
 })
 
 Deno.test('MessageFactory.responseGetPeers - peers/nodes 均为空时抛出异常', () => {

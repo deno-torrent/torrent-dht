@@ -157,7 +157,7 @@ export default class RequestHandler implements MessageHandler {
 
     const infoHash = reqMsg.a?.info_hash as Uint8Array
     const port = reqMsg.a?.port as number // reqNode download port for bittorrent
-    const token = reqMsg.a?.token as string // token of the info hash (from a prior get_peers response)
+    const token = reqMsg.a?.token // opaque token from a prior get_peers response
 
     if (!Id.isValidId(infoHash)) {
       logger.error(`[${tid}]: invalid info hash: ${infoHash}`)
@@ -190,7 +190,7 @@ export default class RequestHandler implements MessageHandler {
       return
     }
 
-    if (!token) {
+    if (!token || token.length === 0) {
       logger.error(`[${tid}]: invalid token: ${token}`)
 
       await sender.sendMessage(

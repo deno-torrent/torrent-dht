@@ -17,7 +17,7 @@ export default class InfoHashManager {
   static readonly PEER_TTL_MS = 30 * 60 * 1000
 
   #infoHashes: Map<string, Map<string, StoredPeer>> = new Map()
-  #tokenMap: Map<string, string> = new Map()
+  #tokenMap: Map<string, Uint8Array> = new Map()
   #lastFullPruneAt = 0
   private constructor() {}
 
@@ -42,13 +42,14 @@ export default class InfoHashManager {
   }
 
   /** Return the announce token stored for an info hash. */
-  findToken(infoHash: string): string | undefined {
+  findToken(infoHash: string): Uint8Array | undefined {
     this.#pruneInfoHash(infoHash, Date.now())
-    return this.#tokenMap.get(infoHash)
+    const token = this.#tokenMap.get(infoHash)
+    return token?.slice()
   }
 
   /** Add multiple peers using the same info hash and token. */
-  addList(infoHash: string, peers: Peer[], token: string): void {
+  addList(infoHash: string, peers: Peer[], token: Uint8Array): void {
     for (const peer of peers) {
       this.add(infoHash, peer, token)
     }
@@ -59,7 +60,7 @@ export default class InfoHashManager {
    * @param infoHash hex string
    * @param peer Peer
    */
-  add(infoHash: string, peer: Peer, token: string): void {
+  add(infoHash: string, peer: Peer, token: Uint8Array): void {
     this.#addPeer(infoHash, peer, token)
   }
 
@@ -68,7 +69,7 @@ export default class InfoHashManager {
     this.#addPeer(infoHash, peer)
   }
 
-  #addPeer(infoHash: string, peer: Peer, token?: string): void {
+  #addPeer(infoHash: string, peer: Peer, token?: Uint8Array): void {
     const now = Date.now()
     let peers = this.#pruneInfoHash(infoHash, now)
 
@@ -87,7 +88,7 @@ export default class InfoHashManager {
     const prevToken = this.#tokenMap.get(infoHash)
 
     // check token
-    if (token !== undefined && prevToken && prevToken !== token) {
+    if (token !== undefined && prevToken && !tokensEqual(prevToken, token)) {
       logger.error(
         `the token of ${infoHash} [${token}] is not equal to [${prevToken}], ignore ${peer.addr}:${peer.port}`,
       )
@@ -116,7 +117,7 @@ export default class InfoHashManager {
 
     // set token
     if (!prevToken && token !== undefined) {
-      this.#tokenMap.set(infoHash, token)
+      this.#tokenMap.set(infoHash, token.slice())
     }
 
     peers.set(peerKey, { peer, lastSeenAt: now })
@@ -168,4 +169,9 @@ export default class InfoHashManager {
 
     return peers
   }
+}
+
+function tokensEqual(left: Uint8Array, right: Uint8Array): boolean {
+  if (left.length !== right.length) return false
+  return left.every((byte, index) => byte === right[index])
 }

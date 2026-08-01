@@ -42,7 +42,7 @@ export class MockSender implements Sender {
     return Promise.resolve()
   }
 
-  sendAnnouncePeerRequest(_node: Node, _infoHash: Uint8Array, _token: string): Promise<void> {
+  sendAnnouncePeerRequest(_node: Node, _infoHash: Uint8Array, _token: Uint8Array): Promise<void> {
     return Promise.resolve()
   }
 
