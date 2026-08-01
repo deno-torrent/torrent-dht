@@ -50,6 +50,14 @@ Deno.test('InfoHashManager.addList - 批量添加 Peer', () => {
   assertEquals(result!.length, 3)
 })
 
+Deno.test('InfoHashManager.add - 相同 endpoint 刷新而不重复占用容量', () => {
+  const hash = 'abababababababababababababababababababab'
+  mgr.add(hash, new Peer(6881, '192.0.2.1'), 'dedupe-token')
+  mgr.add(hash, new Peer(6881, '192.0.2.1'), 'dedupe-token')
+
+  assertEquals(mgr.find(hash)?.length, 1)
+})
+
 // ─── find 不存在的 hash ────────────────────────────────────────────────────────
 
 Deno.test('InfoHashManager.find - 不存在的 hash 返回 undefined', () => {
@@ -94,4 +102,14 @@ Deno.test('InfoHashManager.add - 超过每 hash 100 个 peer 上限后忽略新 
   const peers = mgr.find(hash)
   // 最多 100 个
   assertEquals(peers !== undefined && peers.length <= 100, true)
+})
+
+Deno.test('InfoHashManager.prune - 移除过期 peer 及其 token', () => {
+  const hash = '3333333333333333333333333333333333333333'
+  mgr.add(hash, new Peer(6881, '203.0.113.1'), 'expiring-token')
+
+  const removed = mgr.prune(Date.now() + InfoHashManager.PEER_TTL_MS)
+  assertEquals(removed > 0, true)
+  assertEquals(mgr.find(hash), undefined)
+  assertEquals(mgr.findToken(hash), undefined)
 })

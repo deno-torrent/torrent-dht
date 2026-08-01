@@ -141,6 +141,8 @@ try {
 - Node IDs and info hashes must be exactly 20 bytes.
 - Compact nodes and peers currently support IPv4 only.
 - Routing and peer state is held in process memory and is not persisted.
+- Peer endpoints are deduplicated, expire after 30 minutes without refresh, and are bounded to 100 peers per info hash
+  and 10,000 info hashes per process.
 - The routing table and managers are process-wide singletons; use one active DHT node per Deno worker.
 - **Intentional non-goal:** this package is a BEP-5 DHT component, not a complete BitTorrent client, tracker, storage
   engine, or IPv6 DHT implementation.
@@ -286,6 +288,8 @@ try {
 - 节点 ID 和 info hash 必须恰好为 20 字节。
 - 紧凑节点和 Peer 地址目前仅支持 IPv4。
 - 路由与 Peer 状态只保存在进程内存中，不提供持久化。
+- Peer endpoint 会去重，连续 30 分钟未刷新即过期；每个 info hash 最多保留 100 个 Peer，每个进程最多保留 10,000 个 info
+  hash。
 - 路由表和管理器是进程级单例；每个 Deno worker 只应运行一个活动 DHT 节点。
 - **明确非目标：**本库是 BEP-5 DHT 组件，不是完整的 BitTorrent 客户端、Tracker、存储引擎或 IPv6 DHT 实现。
 

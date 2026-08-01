@@ -1,13 +1,24 @@
 import Peer from '~/src/peer.ts'
 import logger from '~/src/util/log.ts'
 
+type StoredPeer = {
+  peer: Peer
+  lastSeenAt: number
+}
+
 /** In-memory association between info hashes, peers, and announce tokens. */
 export default class InfoHashManager {
   static #INSTANCE = new InfoHashManager()
-  #infoHashes: Map<string, Set<Peer>> = new Map()
+  /** Maximum number of peers retained for one info hash. */
+  static readonly MAX_PEERS_PER_INFO_HASH = 100
+  /** Maximum number of info hashes retained process-wide. */
+  static readonly MAX_INFO_HASHES = 10_000
+  /** Duration for which an unrefreshed peer endpoint remains available. */
+  static readonly PEER_TTL_MS = 30 * 60 * 1000
+
+  #infoHashes: Map<string, Map<string, StoredPeer>> = new Map()
   #tokenMap: Map<string, string> = new Map()
-  #MAX_PEER_NUM_EACH_INFO_HASH = 100 // the max number of peers of a infoHash
-  #MAX_INFO_HASH_NUM = 1024 * 1024 // the max number of infoHashes
+  #lastFullPruneAt = 0
   private constructor() {}
 
   /** Return the process-wide manager instance. */
@@ -21,16 +32,18 @@ export default class InfoHashManager {
    * @returns
    */
   find(infoHash: string): Peer[] | undefined {
-    if (!this.#infoHashes.has(infoHash)) {
+    const peers = this.#pruneInfoHash(infoHash, Date.now())
+    if (!peers) {
       logger.error(`the infoHash ${infoHash} does not exist`)
       return undefined
     }
 
-    return Array.from(this.#infoHashes.get(infoHash)!)
+    return Array.from(peers.values(), ({ peer }) => peer)
   }
 
   /** Return the announce token stored for an info hash. */
   findToken(infoHash: string): string | undefined {
+    this.#pruneInfoHash(infoHash, Date.now())
     return this.#tokenMap.get(infoHash)
   }
 
@@ -56,9 +69,17 @@ export default class InfoHashManager {
   }
 
   #addPeer(infoHash: string, peer: Peer, token?: string): void {
-    if (this.#infoHashes.size >= this.#MAX_INFO_HASH_NUM) {
+    const now = Date.now()
+    let peers = this.#pruneInfoHash(infoHash, now)
+
+    if (!peers && this.#infoHashes.size >= InfoHashManager.MAX_INFO_HASHES) {
+      if (now - this.#lastFullPruneAt >= 60_000) this.prune(now)
+      peers = this.#infoHashes.get(infoHash)
+    }
+
+    if (!peers && this.#infoHashes.size >= InfoHashManager.MAX_INFO_HASHES) {
       logger.error(
-        `the number of infoHashes exceeds the limit ${this.#MAX_INFO_HASH_NUM}, ignore ${infoHash}:${peer.addr}:${peer.port}`,
+        `the number of infoHashes exceeds the limit ${InfoHashManager.MAX_INFO_HASHES}, ignore ${infoHash}:${peer.addr}:${peer.port}`,
       )
       return
     }
@@ -73,19 +94,23 @@ export default class InfoHashManager {
       return
     }
 
-    let peers = this.#infoHashes.get(infoHash)
+    const peerKey = `${peer.addr}\0${peer.port}`
+    if (peers?.has(peerKey)) {
+      peers.set(peerKey, { peer, lastSeenAt: now })
+      return
+    }
 
     // check the number of peers
-    if (peers && peers.size >= this.#MAX_PEER_NUM_EACH_INFO_HASH) {
+    if (peers && peers.size >= InfoHashManager.MAX_PEERS_PER_INFO_HASH) {
       logger.error(
-        `the number of peers of ${infoHash} exceeds the limit ${this.#MAX_PEER_NUM_EACH_INFO_HASH}, ignore ${peer.addr}:${peer.port}`,
+        `the number of peers of ${infoHash} exceeds the limit ${InfoHashManager.MAX_PEERS_PER_INFO_HASH}, ignore ${peer.addr}:${peer.port}`,
       )
       return
     }
 
     // create a new set if the infoHash does not exist
     if (!peers) {
-      peers = new Set()
+      peers = new Map()
       this.#infoHashes.set(infoHash, peers)
     }
 
@@ -94,9 +119,7 @@ export default class InfoHashManager {
       this.#tokenMap.set(infoHash, token)
     }
 
-    peers.add(peer)
-
-    logger.info(`current number of infoHashes: ${this.#infoHashes.size}`)
+    peers.set(peerKey, { peer, lastSeenAt: now })
   }
 
   /**
@@ -110,5 +133,39 @@ export default class InfoHashManager {
     }
     this.#infoHashes.delete(infoHash)
     this.#tokenMap.delete(infoHash)
+  }
+
+  /**
+   * Remove peer endpoints that have not been refreshed within the retention window.
+   *
+   * @param now Current epoch time in milliseconds; exposed for deterministic maintenance and tests.
+   * @returns Number of peer endpoints removed.
+   */
+  prune(now = Date.now()): number {
+    let removed = 0
+    for (const [infoHash, peers] of this.#infoHashes) {
+      const previousSize = peers.size
+      this.#pruneInfoHash(infoHash, now)
+      removed += previousSize - (this.#infoHashes.get(infoHash)?.size ?? 0)
+    }
+    this.#lastFullPruneAt = now
+    return removed
+  }
+
+  #pruneInfoHash(infoHash: string, now: number): Map<string, StoredPeer> | undefined {
+    const peers = this.#infoHashes.get(infoHash)
+    if (!peers) return undefined
+
+    for (const [peerKey, stored] of peers) {
+      if (now - stored.lastSeenAt >= InfoHashManager.PEER_TTL_MS) peers.delete(peerKey)
+    }
+
+    if (peers.size === 0) {
+      this.#infoHashes.delete(infoHash)
+      this.#tokenMap.delete(infoHash)
+      return undefined
+    }
+
+    return peers
   }
 }
