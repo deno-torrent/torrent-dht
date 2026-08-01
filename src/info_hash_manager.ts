@@ -141,7 +141,7 @@ export default class InfoHashManager {
    * @param now Current epoch time in milliseconds; exposed for deterministic maintenance and tests.
    * @returns Number of peer endpoints removed.
    */
-  prune(now = Date.now()): number {
+  prune(now: number = Date.now()): number {
     let removed = 0
     for (const [infoHash, peers] of this.#infoHashes) {
       const previousSize = peers.size
