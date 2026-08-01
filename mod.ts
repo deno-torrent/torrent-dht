@@ -9,6 +9,7 @@
  *
  * const dht = await DHT.listen(6881)
  * await dht.pingBootstrapNodes()
+ * dht.close()
  * ```
  */
 

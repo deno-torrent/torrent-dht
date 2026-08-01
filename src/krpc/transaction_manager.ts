@@ -14,7 +14,7 @@ export type Request = {
  */
 export default class TransactionManager<T> {
   static #INSTANCE = new TransactionManager<Request>()
-  #EXPIRED_TIME = 1000 * 60 * 60 * 24 // 24 小时后未完成的事务自动回收
+  #EXPIRED_TIME = 1000 * 60 // UDP 请求超过 1 分钟后视为失效
   #CHARS = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
   #ID_COUNT_MAX = this.#CHARS.length * this.#CHARS.length // 最大并发事务数 62×62 = 3844（修复：原用 ^ 位异或）
   #ID_COUNT_HALF = Math.floor(this.#ID_COUNT_MAX / 2) // 超过一半时触发过期清理
@@ -111,36 +111,19 @@ export default class TransactionManager<T> {
       this.clearExpiredTid()
     }
 
-    // if borrowed tid count is more than max tid count, force return some tid
-    if (this.#transactions.size >= this.#ID_COUNT_MAX) {
-      this.forcePutback()
-    }
-
     const result = this.#tidPool.values().next()
     if (result.done) {
-      throw new Error('tid pool exhausted')
+      // Never reuse a live transaction ID: a delayed response could otherwise
+      // be matched to an unrelated newer request.
+      this.clearExpiredTid()
+      const retry = this.#tidPool.values().next()
+      if (retry.done) throw new RangeError(`maximum concurrent transaction count reached: ${this.#ID_COUNT_MAX}`)
+      this.#tidPool.delete(retry.value)
+      return retry.value
     }
     const tid = result.value
     this.#tidPool.delete(tid)
     return tid
-  }
-
-  /**
-   * force put back half tid from borrowed to pool
-   * the put back rule is the tid which is borrowed earliest will be returned
-   */
-  private forcePutback() {
-    // return count is half of borrowed tid count
-    const returnCount = this.#transactions.size / 2
-
-    // sort borrowed tid by expired time
-    const sortedTids = [...this.#transactions.entries()].sort((a, b) => a[1].expiredAt - b[1].expiredAt)
-
-    // return the first returnCount tid to pool
-    for (let i = 0; i < returnCount; i++) {
-      const tid = sortedTids[i][0]
-      this.putbackTid(tid)
-    }
   }
 
   /**
@@ -185,6 +168,10 @@ export default class TransactionManager<T> {
    * @returns true if the tid is valid
    */
   isValid(tid: string): boolean {
-    return this.#transactions.has(tid) && !this.isExpiredTid(tid)
+    if (!this.#transactions.has(tid)) return false
+    if (!this.isExpiredTid(tid)) return true
+
+    this.putbackTid(tid)
+    return false
   }
 }

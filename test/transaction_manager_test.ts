@@ -1,7 +1,7 @@
 /**
  * TransactionManager（事务管理器）测试
  */
-import { assertEquals, assertNotEquals } from '@std/assert'
+import { assertEquals, assertNotEquals, assertThrows } from '@std/assert'
 import TransactionManager from '../src/krpc/transaction_manager.ts'
 import { QueryType } from '../src/message_factory.ts'
 
@@ -75,4 +75,22 @@ Deno.test('TransactionManager.getData - finish 后返回 undefined', () => {
 Deno.test('TransactionManager.finish - 对不存在的 TID 不抛出异常', () => {
   // 随机两字符串，几乎不可能是活跃事务
   mgr.finish('!!')
+})
+
+Deno.test('TransactionManager.create - 达到并发上限时不复用活跃 TID', () => {
+  const tids: string[] = []
+  try {
+    for (let i = 0; i < 62 * 62; i++) {
+      tids.push(mgr.create({ type: QueryType.PING, addr: '1.1.1.1', port: 6881 }))
+    }
+
+    assertEquals(new Set(tids).size, 62 * 62)
+    assertThrows(
+      () => mgr.create({ type: QueryType.PING, addr: '1.1.1.1', port: 6881 }),
+      RangeError,
+      'maximum concurrent transaction count reached',
+    )
+  } finally {
+    for (const tid of tids) mgr.finish(tid)
+  }
 })

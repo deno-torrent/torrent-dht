@@ -25,6 +25,7 @@ export interface MessageHandler {
 export class KRPC implements Sender {
   #port: number
   #udp: Deno.DatagramConn
+  #closed = false
   #messageHandlers: Map<MessageType, MessageHandler> = new Map([
     [MessageType.RESPONSE, new ResponseHandler()],
     [MessageType.QUERY, new RequestHandler()],
@@ -42,7 +43,7 @@ export class KRPC implements Sender {
     })
 
     // async handle response
-    this.handlePacket()
+    void this.handlePacket()
   }
   /**
    * create a KRPC instance
@@ -73,33 +74,39 @@ export class KRPC implements Sender {
    * handle udp packet
    */
   async handlePacket() {
-    for await (const packet of this.#udp) {
-      // unpack the packet
-      const [data, addr] = packet as [Uint8Array, Deno.NetAddr]
-      const address = addr.hostname
-      const port = addr.port
-      const message = await MessageFactory.decode(data)
+    try {
+      for await (const packet of this.#udp) {
+        // unpack the packet
+        const [data, addr] = packet as [Uint8Array, Deno.NetAddr]
+        const address = addr.hostname
+        const port = addr.port
+        const message = await MessageFactory.decode(data)
 
-      if (!message) {
-        // write bytes to local
-        logger.error(`[<======UDP-handlePacket] decode data failed: ${data}, from ${address}:${port}`)
+        if (!message) {
+          logger.error(`[<======UDP-handlePacket] decode data failed: ${data}, from ${address}:${port}`)
+          continue
+        }
 
-        // remove the node from routing table
-        logger.info(`[<======UDP-handlePacket]  remove node ${address}:${port} from routing table`)
-        RoutingTable.get().removeByIp(address)
-        continue
+        const tid = message.t
+
+        try {
+          logger.info(`╔============================= HANDLE MESSAGE START ===========================╗${tid}`)
+          await this.dispatchMessage(message, address, port)
+          logger.info(`╚============================= HANDLE MESSAGE END   ===========================╝${tid}\n`)
+        } catch (e) {
+          logger.error(`[<======UDP-handlePacket] dispatch message failed: ${e}`)
+        }
       }
-
-      const tid = message.t
-
-      try {
-        logger.info(`╔============================= HANDLE MESSAGE START ===========================╗${tid}`)
-        await this.dispatchMessage(message, address, port)
-        logger.info(`╚============================= HANDLE MESSAGE END   ===========================╝${tid}\n`)
-      } catch (e) {
-        logger.error(`[<======UDP-handlePacket] dispatch message failed: ${e}`)
-      }
+    } catch (error) {
+      if (!this.#closed) logger.error(`[<======UDP-handlePacket] receive loop failed: ${error}`)
     }
+  }
+
+  /** Close the UDP socket. Calling this method more than once is safe. */
+  close(): void {
+    if (this.#closed) return
+    this.#closed = true
+    this.#udp.close()
   }
 
   /**

@@ -63,6 +63,7 @@ deno run -A --unstable-net your_app.ts
 | `dht.pingBootstrapNodes()`          | Send ping + find_node to all bootstrap nodes        |
 | `dht.sendFindNodeRequest()`         | Send find_node to known routing table nodes         |
 | `dht.sendGetPeersRequest(infoHash)` | Send get_peers to the closest known nodes           |
+| `dht.close()`                       | Close the UDP socket; repeated calls are safe       |
 
 ### RoutingTable (singleton)
 
@@ -105,6 +106,8 @@ verify the JSR package contents locally, run `deno publish --dry-run`.
 Incoming KRPC datagrams are decoded with UDP-size and nesting limits. Malformed message shapes are dropped, and response
 or error packets are accepted only when their source IP and port match the original request. Unknown query methods
 receive the BEP-5 `204 Method Unknown` error.
+
+Call `dht.close()` when the node is no longer needed so its UDP socket is released.
 
 ## Migrating from 1.x
 
@@ -173,6 +176,7 @@ deno run -A --unstable-net your_app.ts
 | `dht.pingBootstrapNodes()`          | 向所有引导节点发送 ping + find_node      |
 | `dht.sendFindNodeRequest()`         | 向路由表中已知节点发送 find_node         |
 | `dht.sendGetPeersRequest(infoHash)` | 向最近节点发送 get_peers 请求            |
+| `dht.close()`                       | 关闭 UDP socket；重复调用安全            |
 
 ### RoutingTable（单例）
 
@@ -213,6 +217,8 @@ deno task test:network
 
 入站 KRPC 数据报受 UDP 大小和嵌套深度限制。结构异常的消息会被丢弃；响应或错误报文仅在来源
 IP、端口与原请求目标一致时才会被接受。未知查询方法会收到 BEP-5 的 `204 Method Unknown` 错误。
+
+节点不再使用时请调用 `dht.close()`，以释放 UDP socket。
 
 ## 从 1.x 迁移
 

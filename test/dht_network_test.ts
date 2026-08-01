@@ -135,6 +135,16 @@ Deno.test({
   },
 })
 
+Deno.test({
+  name: '真实网络 - 关闭节点并释放 UDP socket',
+  ignore: skip,
+  sanitizeResources: false,
+  sanitizeOps: false,
+  fn() {
+    dht!.close()
+  },
+})
+
 // ─── 跳过原因提示 ──────────────────────────────────────────────────────────────
 
 if (skipReason) {

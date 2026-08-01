@@ -107,6 +107,17 @@ Deno.test({
   },
 })
 
+Deno.test({
+  name: 'DHT.close - 可重复关闭并释放 UDP socket',
+  ignore: skip,
+  sanitizeResources: false,
+  sanitizeOps: false,
+  fn() {
+    dht!.close()
+    dht!.close()
+  },
+})
+
 // 如果初始化失败，打印原因便于排查
 if (skipReason) {
   console.warn(`\n[dht_test] 所有 DHT 测试已跳过：${skipReason}\n`)

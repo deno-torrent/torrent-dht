@@ -54,7 +54,7 @@ export default class DHT {
     this.#krpc = KRPC.create(port)
 
     // ping the bootstrap nodes
-    this.pingBootstrapNodes()
+    void this.pingBootstrapNodes().catch((error) => logger.error(`bootstrap failed: ${error}`))
   }
 
   /**
@@ -121,5 +121,15 @@ export default class DHT {
         await this.#krpc.sendGetPeersRequest(node, infoHash)
       }
     }
+  }
+
+  /**
+   * Close the DHT node and release its UDP socket.
+   *
+   * Calling this method more than once is safe. The instance must not be used
+   * to send requests after it has been closed.
+   */
+  close(): void {
+    this.#krpc.close()
   }
 }
