@@ -1,21 +1,32 @@
-name: test
-on:
-  push:
-    branches:
-      - master
+name: quality
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
 
 jobs:
-  test:
-    name: test
+  quality:
+    name: Deno quality checks
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
-      - name: Set up deno
-        uses: denoland/setup-deno@v1
-        with:
-          deno-version: v1.x
+      - name: Set up Deno
+        uses: denoland/setup-deno@v2
+
+      - name: Check formatting
+        run: deno task fmt
+
+      - name: Lint
+        run: deno task lint
+
+      - name: Type-check
+        run: deno task check
 
       - name: Test
         run: deno task test
+
+      - name: Verify package
+        run: deno publish --dry-run

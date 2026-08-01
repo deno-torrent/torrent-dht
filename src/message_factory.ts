@@ -1,10 +1,62 @@
-import { decode as bdecode, encode as bencode } from '@deno-torrent/bencode'
+import { type BencodeDict, type BencodeValue, decode as bdecode, encode as bencode } from '@deno-torrent/bencode'
 import { concat } from '@std/bytes'
 import Id from '~/src/id.ts'
 import Node from '~/src/node.ts'
 import Peer from '~/src/peer.ts'
 import RoutingTable from '~/src/routing_table.ts'
 import logger from '~/src/util/log.ts'
+
+// IPv4 UDP payloads cannot exceed 65,507 bytes. KRPC messages only need a few
+// container levels, so keep the bencode decoder well below its general-purpose
+// defaults when handling untrusted datagrams.
+const MAX_KRPC_MESSAGE_BYTES = 65_507
+const MAX_KRPC_MESSAGE_DEPTH = 16
+
+function toBencodeValue(value: unknown): BencodeValue {
+  if (typeof value === 'string' || value instanceof Uint8Array) return value
+
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value)) throw new TypeError('bencode numbers must be safe integers')
+    return value
+  }
+
+  if (Array.isArray(value)) return value.map(toBencodeValue)
+
+  if (value instanceof Map) {
+    const dictionary: BencodeDict = new Map()
+    for (const [key, entry] of value) {
+      if (typeof key !== 'string' && !(key instanceof Uint8Array)) {
+        throw new TypeError('bencode dictionary keys must be strings or Uint8Array values')
+      }
+      dictionary.set(key, toBencodeValue(entry))
+    }
+    return dictionary
+  }
+
+  if (typeof value === 'object' && value !== null) {
+    const dictionary: BencodeDict = new Map()
+    for (const [key, entry] of Object.entries(value)) {
+      if (entry !== undefined) dictionary.set(key, toBencodeValue(entry))
+    }
+    return dictionary
+  }
+
+  throw new TypeError(`unsupported bencode value: ${String(value)}`)
+}
+
+function fromBencodeValue(value: BencodeValue): unknown {
+  if (value instanceof Map) {
+    const dictionary: Record<string, unknown> = Object.create(null)
+    for (const [key, entry] of value) {
+      if (typeof key !== 'string') throw new TypeError('KRPC dictionary keys must be UTF-8 strings')
+      dictionary[key] = fromBencodeValue(entry)
+    }
+    return dictionary
+  }
+
+  if (Array.isArray(value)) return value.map(fromBencodeValue)
+  return value
+}
 
 /** KRPC 消息结构 */
 export type Message = {
@@ -109,9 +161,22 @@ export default class MessageFactory {
    * @param data 待解码的 Bencode 字节
    * @returns 解码成功返回消息对象，格式错误返回 `undefined`
    */
-  static async decode(data: Uint8Array): Promise<Message | undefined> {
+  static decode(data: Uint8Array): Promise<Message | undefined> {
+    return Promise.resolve().then(() => MessageFactory.decodeSync(data))
+  }
+
+  private static decodeSync(data: Uint8Array): Message | undefined {
     try {
-      const message = (await bdecode(data)) as Message
+      const decoded = fromBencodeValue(
+        bdecode(data, {
+          maxBytes: MAX_KRPC_MESSAGE_BYTES,
+          maxDepth: MAX_KRPC_MESSAGE_DEPTH,
+        }),
+      )
+
+      if (typeof decoded !== 'object' || decoded === null || Array.isArray(decoded)) return undefined
+
+      const message = decoded as Message
 
       if (!message || !message.y || !message.t) return undefined
 
@@ -127,8 +192,8 @@ export default class MessageFactory {
    *
    * @returns Bencode 编码的字节数组
    */
-  async bencode(): Promise<Uint8Array> {
-    return await bencode(this.#message)
+  bencode(): Promise<Uint8Array> {
+    return Promise.resolve().then(() => bencode(toBencodeValue(this.#message)))
   }
 
   /**

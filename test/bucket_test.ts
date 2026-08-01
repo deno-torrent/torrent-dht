@@ -1,7 +1,7 @@
 /**
  * Bucket（K-桶）测试
  */
-import { assertEquals, assertNotEquals, assertThrows } from '@std/assert'
+import { assertEquals, assertThrows } from '@std/assert'
 import { BitArray } from '@deno-torrent/toolkit'
 import Bucket from '../src/bucket.ts'
 import Id from '../src/id.ts'

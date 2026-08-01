@@ -24,19 +24,27 @@ export class MockSender implements Sender {
   readonly sentMessages: SentMessage[] = []
   readonly sentGetPeers: Array<{ node: Node; infoHash: Uint8Array }> = []
 
-  async sendMessage(port: number, addr: string, factory: MessageFactory): Promise<void> {
+  sendMessage(port: number, addr: string, factory: MessageFactory): Promise<void> {
     this.sentMessages.push({ port, addr, factory })
+    return Promise.resolve()
   }
 
-  async sendPingRequest(_node: Node): Promise<void> {}
+  sendPingRequest(_node: Node): Promise<void> {
+    return Promise.resolve()
+  }
 
-  async sendFindNodeRequest(_port: number, _addr: string, _targetId: Id): Promise<void> {}
+  sendFindNodeRequest(_port: number, _addr: string, _targetId: Id): Promise<void> {
+    return Promise.resolve()
+  }
 
-  async sendGetPeersRequest(node: Node, infoHash: Uint8Array): Promise<void> {
+  sendGetPeersRequest(node: Node, infoHash: Uint8Array): Promise<void> {
     this.sentGetPeers.push({ node, infoHash })
+    return Promise.resolve()
   }
 
-  async sendAnnouncePeerRequest(_node: Node, _infoHash: Uint8Array, _token: string): Promise<void> {}
+  sendAnnouncePeerRequest(_node: Node, _infoHash: Uint8Array, _token: string): Promise<void> {
+    return Promise.resolve()
+  }
 
   /** 快捷方法：取第 n 条 sendMessage 记录的解码 Message */
   getMessageAt(index: number) {

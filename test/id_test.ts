@@ -13,6 +13,18 @@ Deno.test('Id.fromUnit8Array - 从 20 字节创建', () => {
   assertEquals(id.bits.bytes.length, 20)
 })
 
+Deno.test('Id.fromUnit8Array - 复制输入和输出字节（toolkit 2.0 回归）', () => {
+  const source = new Uint8Array(20)
+  source[0] = 1
+  const id = Id.fromUnit8Array(source)
+
+  source[0] = 2
+  const exposed = id.bits.bytes
+  exposed[0] = 3
+
+  assertEquals(id.bits.bytes[0], 1)
+})
+
 Deno.test('Id.fromUnit8Array - 非 20 字节抛出异常', () => {
   assertThrows(() => {
     Id.fromUnit8Array(new Uint8Array(10))

@@ -8,7 +8,7 @@
  *   4. 路由表节点数始终满足上限约束（不超过 160 桶 × 8 = 1280）
  *
  * 运行方式：
- *   deno test -A --unstable-net test/dht_network_test.ts
+ *   deno task test:network
  *
  * 注意：
  *   - 需要真实外网连接，若网络不可用测试自动跳过

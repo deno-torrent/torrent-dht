@@ -12,7 +12,6 @@ import { MessageType, QueryType } from '../src/message_factory.ts'
 import RoutingTable from '../src/routing_table.ts'
 import InfoHashManager from '../src/info_hash_manager.ts'
 import { makeInfoHash, makeLocalNode, makeNode, MockSender } from './fixtures.ts'
-import { packageCompactNode } from '../src/util/net.ts'
 
 const localNode = makeLocalNode('response-handler-test', 16001)
 RoutingTable.init(localNode)

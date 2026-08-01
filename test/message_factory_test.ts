@@ -163,6 +163,24 @@ Deno.test('MessageFactory.decode - 空数据返回 undefined', async () => {
   assertEquals(result, undefined)
 })
 
+Deno.test('MessageFactory.decode - bencode 2.0 拒绝尾随数据', async () => {
+  const encoded = await MessageFactory.requestPing('aa', nodeId).bencode()
+  const withTrailingByte = new Uint8Array(encoded.length + 1)
+  withTrailingByte.set(encoded)
+  withTrailingByte[encoded.length] = 0
+
+  assertEquals(await MessageFactory.decode(withTrailingByte), undefined)
+})
+
+Deno.test('MessageFactory.decode - 拒绝超过 KRPC UDP 上限的数据', async () => {
+  assertEquals(await MessageFactory.decode(new Uint8Array(65_508)), undefined)
+})
+
+Deno.test('MessageFactory.decode - 拒绝超过 KRPC 嵌套上限的数据', async () => {
+  const deeplyNestedList = new TextEncoder().encode(`${'l'.repeat(17)}${'e'.repeat(17)}`)
+  assertEquals(await MessageFactory.decode(deeplyNestedList), undefined)
+})
+
 // ─── responseAnnouncePeer ────────────────────────────────────────────────────
 
 Deno.test('MessageFactory.responseAnnouncePeer - 返回正确类型的响应消息', () => {

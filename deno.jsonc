@@ -1,13 +1,13 @@
 {
   "name": "@deno-torrent/torrent-dht",
-  "version": "1.0.1",
+  "version": "2.0.0",
   "exports": {
     ".": "./mod.ts"
   },
   "imports": {
     // JSR 官方库 - deno-torrent 套件
-    "@deno-torrent/bencode": "jsr:@deno-torrent/bencode@^1.0.0",
-    "@deno-torrent/toolkit": "jsr:@deno-torrent/toolkit@^1.0.2",
+    "@deno-torrent/bencode": "jsr:@deno-torrent/bencode@^2.0.0",
+    "@deno-torrent/toolkit": "jsr:@deno-torrent/toolkit@^2.0.0",
     // JSR 标准库
     "@std/assert": "jsr:@std/assert@^1.0.0",
     "@std/bytes": "jsr:@std/bytes@^1.0.0",
@@ -18,7 +18,12 @@
   },
   "tasks": {
     "dev": "deno run -A --unstable-net main.ts",
-    "test": "deno test -A --unstable-net"
+    "fmt": "deno fmt --check",
+    "lint": "deno lint",
+    "check": "deno check --frozen mod.ts main.ts && deno test --no-run --frozen",
+    "test": "deno test --frozen --ignore=test/dht_test.ts --ignore=test/dht_network_test.ts",
+    "test:integration": "deno test -A --unstable-net --frozen test/dht_test.ts",
+    "test:network": "deno test -A --unstable-net --frozen test/dht_network_test.ts"
   },
   "test": {
     "include": [

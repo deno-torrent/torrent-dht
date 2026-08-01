@@ -6,6 +6,8 @@
 
 BitTorrent DHT ([BEP-5](http://bittorrent.org/beps/bep_0005.html)) implementation in pure Deno / TypeScript.
 
+Requires the current stable Deno 2.x release.
+
 [中文文档](#中文文档)
 
 ---
@@ -13,7 +15,7 @@ BitTorrent DHT ([BEP-5](http://bittorrent.org/beps/bep_0005.html)) implementatio
 ## Installation
 
 ```ts
-import DHT from 'jsr:@deno-torrent/torrent-dht'
+import { DHT } from 'jsr:@deno-torrent/torrent-dht@^2.0.0'
 ```
 
 Or add to `deno.jsonc`:
@@ -21,7 +23,7 @@ Or add to `deno.jsonc`:
 ```jsonc
 {
   "imports": {
-    "@deno-torrent/torrent-dht": "jsr:@deno-torrent/torrent-dht@^1.0.0"
+    "@deno-torrent/torrent-dht": "jsr:@deno-torrent/torrent-dht@^2.0.0"
   }
 }
 ```
@@ -29,8 +31,7 @@ Or add to `deno.jsonc`:
 ## Quick Start
 
 ```ts
-import DHT from '@deno-torrent/torrent-dht'
-import RoutingTable from '@deno-torrent/torrent-dht/routing_table'
+import { DHT, RoutingTable } from '@deno-torrent/torrent-dht'
 
 const dht = await DHT.listen(6881)
 
@@ -43,6 +44,13 @@ setInterval(async () => {
 
 const infoHash = new Uint8Array(20) // replace with real info hash
 await dht.sendGetPeersRequest(infoHash)
+```
+
+Run applications that call `DHT.listen()` with `--unstable-net`, because Deno 2.x still gates UDP datagram sockets
+behind that flag:
+
+```bash
+deno run -A --unstable-net your_app.ts
 ```
 
 ## API Reference
@@ -70,8 +78,32 @@ await dht.sendGetPeersRequest(infoHash)
 ## Running Tests
 
 ```bash
+deno task fmt
+deno task lint
+deno task check
 deno task test
 ```
+
+The default test task is deterministic and excludes tests that open a UDP socket or contact public services. Run those
+separately when the environment permits:
+
+```bash
+deno task test:integration
+deno task test:network
+```
+
+Both optional tasks require network access. `test:network` also depends on public DHT bootstrap nodes and can fail when
+UDP traffic or those nodes are unavailable; it is intentionally not part of the default CI gate.
+
+## Development
+
+Use the current stable Deno 2.x release. Before opening a pull request, run the four default quality tasks above. To
+verify the JSR package contents locally, run `deno publish --dry-run`.
+
+## Migrating from 1.x
+
+Version 2 upgrades `@deno-torrent/bencode` and `@deno-torrent/toolkit` to their 2.0 APIs. The public `BitArray` values
+exposed by `Id` and `Bucket` now use copy-on-read byte ownership. See [MIGRATION_2.0.md](./MIGRATION_2.0.md).
 
 ## License
 
@@ -83,10 +115,12 @@ deno task test
 
 BEP-5 DHT 协议（[BEP-5](http://bittorrent.org/beps/bep_0005.html)）的纯 Deno / TypeScript 实现。
 
+需要当前稳定版 Deno 2.x。
+
 ## 安装
 
 ```ts
-import DHT from 'jsr:@deno-torrent/torrent-dht'
+import { DHT } from 'jsr:@deno-torrent/torrent-dht@^2.0.0'
 ```
 
 或在 `deno.jsonc` 中配置：
@@ -94,7 +128,7 @@ import DHT from 'jsr:@deno-torrent/torrent-dht'
 ```jsonc
 {
   "imports": {
-    "@deno-torrent/torrent-dht": "jsr:@deno-torrent/torrent-dht@^1.0.0"
+    "@deno-torrent/torrent-dht": "jsr:@deno-torrent/torrent-dht@^2.0.0"
   }
 }
 ```
@@ -102,8 +136,7 @@ import DHT from 'jsr:@deno-torrent/torrent-dht'
 ## 快速开始
 
 ```ts
-import DHT from '@deno-torrent/torrent-dht'
-import RoutingTable from '@deno-torrent/torrent-dht/routing_table'
+import { DHT, RoutingTable } from '@deno-torrent/torrent-dht'
 
 const dht = await DHT.listen(6881)
 
@@ -116,6 +149,12 @@ setInterval(async () => {
 
 const infoHash = new Uint8Array(20) // 替换为真实 info hash
 await dht.sendGetPeersRequest(infoHash)
+```
+
+调用 `DHT.listen()` 的应用需要使用 `--unstable-net` 启动，因为 Deno 2.x 仍将 UDP 数据报 socket 置于该标志之后：
+
+```bash
+deno run -A --unstable-net your_app.ts
 ```
 
 ## API
@@ -143,8 +182,31 @@ await dht.sendGetPeersRequest(infoHash)
 ## 运行测试
 
 ```bash
+deno task fmt
+deno task lint
+deno task check
 deno task test
 ```
+
+默认测试任务只运行确定性的测试，不包含会打开 UDP socket 或访问公网服务的测试。网络环境允许时可分别运行：
+
+```bash
+deno task test:integration
+deno task test:network
+```
+
+两个可选任务都需要网络权限。`test:network` 还依赖公网 DHT 引导节点；如果 UDP
+流量受限或引导节点不可用，测试可能失败，因此它被明确排除在默认 CI 门禁之外。
+
+## 开发
+
+请使用当前稳定版 Deno 2.x。提交 Pull Request 前运行上述四个默认质量任务；可使用 `deno publish --dry-run` 在本地验证 JSR
+包内容。
+
+## 从 1.x 迁移
+
+版本 2 将 `@deno-torrent/bencode` 和 `@deno-torrent/toolkit` 升级到 2.0 API。`Id`、`Bucket` 等公共 API 暴露的 `BitArray`
+现在使用输入复制及读取时复制语义。完整说明见 [MIGRATION_2.0.md](./MIGRATION_2.0.md)。
 
 ## 许可证
 

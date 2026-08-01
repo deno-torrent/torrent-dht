@@ -52,11 +52,11 @@ export default class ResponseHandler implements MessageHandler {
     // dispatch by the original query type
     switch (request.type) {
       case QueryType.PING: {
-        this.handlePingResponse(request, response, respNode, tid)
+        this.handlePingResponse(respNode, tid)
         break
       }
       case QueryType.FIND_NODE: {
-        this.handleFindNodeResponse(request, response, respNode, tid)
+        this.handleFindNodeResponse(response, respNode, tid)
         break
       }
       case QueryType.GET_PEERS: {
@@ -64,7 +64,7 @@ export default class ResponseHandler implements MessageHandler {
         break
       }
       case QueryType.ANNOUNCE_PEER: {
-        this.handleAnnouncePeerResponse(request, response, respNode, tid)
+        this.handleAnnouncePeerResponse(respNode, tid)
         break
       }
       default:
@@ -72,7 +72,7 @@ export default class ResponseHandler implements MessageHandler {
     }
   }
 
-  private handlePingResponse(request: Request, response: Message, respNode: Node, tid: string) {
+  private handlePingResponse(respNode: Node, tid: string) {
     logger.info(`[<======RESPONSE-PING-${tid}] received from ${respNode.addr}:${respNode.port}`)
 
     // add the node into the routing table
@@ -81,7 +81,7 @@ export default class ResponseHandler implements MessageHandler {
     }
   }
 
-  private handleFindNodeResponse(request: Request, response: Message, respNode: Node, tid: string) {
+  private handleFindNodeResponse(response: Message, respNode: Node, tid: string) {
     logger.info(`[<======RESPONSE-FIND_NODE-${tid}] received from ${respNode.addr}:${respNode.port}`)
 
     const nodesBytes = response.r?.nodes
@@ -161,7 +161,7 @@ export default class ResponseHandler implements MessageHandler {
         try {
           const peer = Peer.fromCompact(bytes)
           peers.push(peer)
-        } catch (e) {
+        } catch {
           logger.error(`[${tid}] invalid peer bytes: ${bytes}`)
         }
       }
@@ -209,7 +209,7 @@ export default class ResponseHandler implements MessageHandler {
     }
   }
 
-  private handleAnnouncePeerResponse(request: Request, response: Message, respNode: Node, tid: string) {
+  private handleAnnouncePeerResponse(respNode: Node, tid: string) {
     logger.info(`[<======RESPONSE-ANNOUNCE_PEER-${tid}] received from ${respNode.addr}:${respNode.port}`)
 
     // update the response node

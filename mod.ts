@@ -5,7 +5,7 @@
  *
  * @example
  * ```ts
- * import DHT from "@deno-torrent/torrent-dht"
+ * import { DHT } from "@deno-torrent/torrent-dht"
  *
  * const dht = await DHT.listen(6881)
  * await dht.pingBootstrapNodes()
