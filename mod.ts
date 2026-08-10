@@ -38,6 +38,7 @@ export { default as BlackListManager } from '~/src/black_list_manager.ts'
 
 // KRPC 消息类型定义
 export type { Message } from '~/src/message_factory.ts'
+export type { DatagramTransport } from '~/src/krpc/krpc.ts'
 export { ErrorType, MessageType, QueryType } from '~/src/message_factory.ts'
 export { default as MessageFactory } from '~/src/message_factory.ts'
 

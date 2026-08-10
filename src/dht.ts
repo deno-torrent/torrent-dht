@@ -1,6 +1,6 @@
 import Id from '~/src/id.ts'
 import InfoHashManager from '~/src/info_hash_manager.ts'
-import { KRPC } from '~/src/krpc/krpc.ts'
+import { type DatagramTransport, KRPC } from '~/src/krpc/krpc.ts'
 import TransactionManager, { Request } from '~/src/krpc/transaction_manager.ts'
 import TokenManager from '~/src/krpc/token_manager.ts'
 import LocalNode from '~/src/local_node.ts'
@@ -27,6 +27,8 @@ export type DHTOptions = {
   bootstrapNodes?: BootstrapNode[]
   /** Start bootstrap requests during construction. Defaults to true. */
   autoBootstrap?: boolean
+  /** Caller-owned UDP transport, used when DHT shares a socket with another protocol. */
+  transport?: DatagramTransport
 }
 
 /** Controls one bounded iterative BEP-5 peer lookup. */
@@ -135,6 +137,7 @@ export default class DHT {
       transactionManager,
       tokenManager,
       bindAddress,
+      options.transport,
     )
 
     if (autoBootstrap) {
