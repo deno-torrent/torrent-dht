@@ -43,7 +43,13 @@ setInterval(async () => {
 }, 5000)
 
 const infoHash = new Uint8Array(20) // replace with real info hash
-await dht.sendGetPeersRequest(infoHash)
+const result = await dht.getPeers(infoHash, {
+  timeoutMs: 15_000,
+  onPeer: (peer) => console.log(peer.addr, peer.port),
+})
+
+// After downloading, publish the BitTorrent listener using fresh per-node tokens.
+await dht.announcePeer(infoHash, { port: 6881 })
 ```
 
 Run applications that call `DHT.listen()` with `--unstable-net`, because Deno 2.x still gates UDP datagram sockets
@@ -57,13 +63,19 @@ deno run -A --unstable-net your_app.ts
 
 ### DHT
 
-| Method                              | Description                                         |
-| ----------------------------------- | --------------------------------------------------- |
-| `DHT.listen(options)`               | Create and start a DHT node, returns `Promise<DHT>` |
-| `dht.pingBootstrapNodes()`          | Send ping + find_node to all bootstrap nodes        |
-| `dht.sendFindNodeRequest()`         | Send find_node to known routing table nodes         |
-| `dht.sendGetPeersRequest(infoHash)` | Send get_peers to the closest known nodes           |
-| `dht.close()`                       | Close the UDP socket; repeated calls are safe       |
+| Method                              | Description                                                          |
+| ----------------------------------- | -------------------------------------------------------------------- |
+| `DHT.listen(options)`               | Create and start a DHT node, returns `Promise<DHT>`                  |
+| `dht.getPeers(infoHash, options?)`  | Bounded iterative lookup with completion, cancellation, and callback |
+| `dht.announcePeer(infoHash, opts?)` | Obtain/reuse per-node tokens and await announce acknowledgements     |
+| `dht.pingBootstrapNodes()`          | Send ping + find_node to all bootstrap nodes                         |
+| `dht.sendFindNodeRequest()`         | Send find_node to known routing table nodes                          |
+| `dht.sendGetPeersRequest(infoHash)` | Low-level fire-and-follow get_peers API                              |
+| `dht.close()`                       | Close the UDP socket; repeated calls are safe                        |
+
+`getPeers` defaults to three concurrent requests, a 15-second overall deadline, a three-second per-node deadline, 64
+contacted nodes, and 200 unique peers. An explicit `AbortSignal` stops outstanding KRPC transactions. The result reports
+contacted/responding node counts and whether the search exhausted its candidates or reached the deadline.
 
 ### RoutingTable
 
@@ -215,7 +227,13 @@ setInterval(async () => {
 }, 5000)
 
 const infoHash = new Uint8Array(20) // 替换为真实 info hash
-await dht.sendGetPeersRequest(infoHash)
+const result = await dht.getPeers(infoHash, {
+  timeoutMs: 15_000,
+  onPeer: (peer) => console.log(peer.addr, peer.port),
+})
+
+// 下载完成后，用各 DHT 节点签发的新 token 公布 BT 监听端口。
+await dht.announcePeer(infoHash, { port: 6881 })
 ```
 
 调用 `DHT.listen()` 的应用需要使用 `--unstable-net` 启动，因为 Deno 2.x 仍将 UDP 数据报 socket 置于该标志之后：
@@ -228,13 +246,15 @@ deno run -A --unstable-net your_app.ts
 
 ### DHT 类
 
-| 方法                                | 说明                                     |
-| ----------------------------------- | ---------------------------------------- |
-| `DHT.listen(options)`               | 创建并启动 DHT 节点，返回 `Promise<DHT>` |
-| `dht.pingBootstrapNodes()`          | 向所有引导节点发送 ping + find_node      |
-| `dht.sendFindNodeRequest()`         | 向路由表中已知节点发送 find_node         |
-| `dht.sendGetPeersRequest(infoHash)` | 向最近节点发送 get_peers 请求            |
-| `dht.close()`                       | 关闭 UDP socket；重复调用安全            |
+| 方法                                | 说明                                           |
+| ----------------------------------- | ---------------------------------------------- |
+| `DHT.listen(options)`               | 创建并启动 DHT 节点，返回 `Promise<DHT>`       |
+| `dht.getPeers(infoHash, options?)`  | 有界迭代查询，支持完成状态、取消和逐 Peer 回调 |
+| `dht.announcePeer(infoHash, opts?)` | 获取/复用逐节点 token，并等待公布确认          |
+| `dht.pingBootstrapNodes()`          | 向所有引导节点发送 ping + find_node            |
+| `dht.sendFindNodeRequest()`         | 向路由表中已知节点发送 find_node               |
+| `dht.sendGetPeersRequest(infoHash)` | 底层 fire-and-follow get_peers 接口            |
+| `dht.close()`                       | 关闭 UDP socket；重复调用安全                  |
 
 ### RoutingTable
 

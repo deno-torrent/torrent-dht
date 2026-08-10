@@ -167,9 +167,10 @@ export default class ResponseHandler implements MessageHandler {
       return
     }
 
-    if (peersBytesList) {
-      const peers: Peer[] = []
+    const peers: Peer[] = []
+    const nodes: Node[] = []
 
+    if (peersBytesList) {
       for (const bytes of peersBytesList) {
         try {
           const peer = Peer.fromCompact(bytes)
@@ -187,14 +188,13 @@ export default class ResponseHandler implements MessageHandler {
         },peers is ${peers}`,
       )
 
-      if (peers.length <= 0) {
-        logger.info(`[${tid}] no peers found`)
+      // store the peers associated with the token and info hash
+      if (peers.length > 0) this.infoHashManager.addList(BytesUtil.bytes2HexStr(infoHash), peers, token)
+    } else if (nodesBytes) {
+      if (nodesBytes.length % COMPAT_NODE_LEN !== 0) {
+        logger.error(`[${tid}] invalid compact nodes length: ${nodesBytes.length}`)
         return
       }
-
-      // store the peers associated with the token and info hash
-      this.infoHashManager.addList(BytesUtil.bytes2HexStr(infoHash), peers, token)
-    } else if (nodesBytes) {
       logger.info(
         `[${tid}] received ${nodesBytes.length / COMPAT_NODE_LEN} nodes for info hash: ${
           BytesUtil.bytes2HexStr(
@@ -207,9 +207,11 @@ export default class ResponseHandler implements MessageHandler {
 
       for (const nodeBytes of nodesBytesList) {
         const node = Node.fromCompact(nodeBytes)
-
-        // send get peers request to the node
-        await sender.sendGetPeersRequest(node, infoHash)
+        nodes.push(node)
+        if (!request.onGetPeersResult) {
+          // Preserve the original fire-and-follow behavior for the low-level API.
+          await sender.sendGetPeersRequest(node, infoHash)
+        }
       }
     } else {
       logger.error(`[${tid}] invalid response: ${JSON.stringify(response)}`)
@@ -220,6 +222,8 @@ export default class ResponseHandler implements MessageHandler {
     if (!await this.addNode(respNode)) {
       logger.error(`[${tid}] add node ${respNode} to routing table failed`)
     }
+
+    request.onGetPeersResult?.({ node: respNode, peers, nodes, token: token.slice() })
   }
 
   private async handleAnnouncePeerResponse(respNode: Node, tid: string) {

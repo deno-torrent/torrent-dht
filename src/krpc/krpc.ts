@@ -5,7 +5,7 @@ import RequestHandler from '~/src/krpc/handler/request_handler.ts'
 import ResponseHandler from '~/src/krpc/handler/response_handler.ts'
 import Sender from '~/src/krpc/sender.ts'
 import TransactionManager from '~/src/krpc/transaction_manager.ts'
-import type { Request } from '~/src/krpc/transaction_manager.ts'
+import type { GetPeersQueryResult, Request } from '~/src/krpc/transaction_manager.ts'
 import TokenManager from '~/src/krpc/token_manager.ts'
 import MessageFactory, { Message, MessageType, QueryType } from '~/src/message_factory.ts'
 import Node from '~/src/node.ts'
@@ -300,6 +300,53 @@ export class KRPC implements Sender {
     await this.#sendTracked(tid, targetNode.port, address, messageFC)
   }
 
+  /** Perform one bounded get_peers exchange and return its parsed response. */
+  async queryGetPeers(
+    targetNode: Node,
+    infoHash: Uint8Array,
+    options: { signal?: AbortSignal; timeoutMs?: number } = {},
+  ): Promise<GetPeersQueryResult> {
+    if (!Id.isValidId(infoHash)) throw new RangeError('infoHash must contain exactly 20 bytes')
+    const timeoutMs = options.timeoutMs ?? 3_000
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new RangeError('timeoutMs must be greater than zero')
+    options.signal?.throwIfAborted()
+    const address = await this.resolveAddress(targetNode.addr)
+
+    return new Promise<GetPeersQueryResult>((resolve, reject) => {
+      let settled = false
+      let tid = ''
+      const finish = (result?: GetPeersQueryResult, error?: unknown) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        options.signal?.removeEventListener('abort', onAbort)
+        if (tid && this.transactionManager.isValid(tid)) this.transactionManager.finish(tid)
+        if (error !== undefined) reject(error)
+        else resolve(result!)
+      }
+      const onAbort = () => finish(undefined, options.signal?.reason ?? abortError())
+      tid = this.transactionManager.create({
+        type: QueryType.GET_PEERS,
+        infoHash: Uint8Array.from(infoHash),
+        addr: address,
+        port: targetNode.port,
+        onResult: (reachable) => {
+          if (!reachable) {
+            finish(undefined, new Error(`DHT node ${targetNode.addr}:${targetNode.port} rejected get_peers`))
+          }
+        },
+        onGetPeersResult: (result) => finish(result),
+      })
+      const timer = setTimeout(
+        () => finish(undefined, new DOMException('DHT get_peers query timed out', 'TimeoutError')),
+        timeoutMs,
+      )
+      options.signal?.addEventListener('abort', onAbort, { once: true })
+      const message = MessageFactory.requestGetPeers(tid, this.routingTable.localNode.id, infoHash)
+      void this.#sendTracked(tid, targetNode.port, address, message).catch((error) => finish(undefined, error))
+    })
+  }
+
   /**
    * send a announce_peer query to target node to announce the peer, means tell the node that I have the file
    *
@@ -310,7 +357,7 @@ export class KRPC implements Sender {
    * @param infoHash the info hash of the file
    * @param token the token of the node
    */
-  async sendAnnouncePeerRequest(targetNode: Node, infoHash: Uint8Array, token: Uint8Array) {
+  async sendAnnouncePeerRequest(targetNode: Node, infoHash: Uint8Array, token: Uint8Array, peerPort = this.#port) {
     const address = await this.resolveAddress(targetNode.addr)
     const tid = this.transactionManager.create({
       type: QueryType.ANNOUNCE_PEER,
@@ -322,10 +369,65 @@ export class KRPC implements Sender {
       tid,
       this.routingTable.localNode.id,
       infoHash,
-      this.#port,
+      peerPort,
       token,
     )
     await this.#sendTracked(tid, targetNode.port, address, messageFC)
+  }
+
+  /** Perform one bounded announce_peer exchange and wait for acknowledgement. */
+  async queryAnnouncePeer(
+    targetNode: Node,
+    infoHash: Uint8Array,
+    token: Uint8Array,
+    peerPort: number,
+    options: { signal?: AbortSignal; timeoutMs?: number } = {},
+  ): Promise<void> {
+    if (!Id.isValidId(infoHash)) throw new RangeError('infoHash must contain exactly 20 bytes')
+    if (!NetUtil.isNetPort(peerPort) || peerPort === 0) throw new RangeError('peerPort must be in range [1, 65535]')
+    if (token.length === 0) throw new RangeError('token must not be empty')
+    const timeoutMs = options.timeoutMs ?? 3_000
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new RangeError('timeoutMs must be greater than zero')
+    options.signal?.throwIfAborted()
+    const address = await this.resolveAddress(targetNode.addr)
+
+    return new Promise<void>((resolve, reject) => {
+      let settled = false
+      let tid = ''
+      const finish = (error?: unknown) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        options.signal?.removeEventListener('abort', onAbort)
+        if (tid && this.transactionManager.isValid(tid)) this.transactionManager.finish(tid)
+        if (error !== undefined) reject(error)
+        else resolve()
+      }
+      const onAbort = () => finish(options.signal?.reason ?? abortError())
+      tid = this.transactionManager.create({
+        type: QueryType.ANNOUNCE_PEER,
+        infoHash: Uint8Array.from(infoHash),
+        addr: address,
+        port: targetNode.port,
+        onResult: (reachable) =>
+          reachable
+            ? finish()
+            : finish(new Error(`DHT node ${targetNode.addr}:${targetNode.port} rejected announce_peer`)),
+      })
+      const timer = setTimeout(
+        () => finish(new DOMException('DHT announce_peer query timed out', 'TimeoutError')),
+        timeoutMs,
+      )
+      options.signal?.addEventListener('abort', onAbort, { once: true })
+      const message = MessageFactory.requestAnnouncePeer(
+        tid,
+        this.routingTable.localNode.id,
+        infoHash,
+        peerPort,
+        token,
+      )
+      void this.#sendTracked(tid, targetNode.port, address, message).catch(finish)
+    })
   }
 
   /**
@@ -351,4 +453,8 @@ export class KRPC implements Sender {
     if (!resolved) throw new Error(`could not resolve IPv4 address for ${address}`)
     return resolved
   }
+}
+
+function abortError(): DOMException {
+  return new DOMException('The operation was aborted', 'AbortError')
 }

@@ -4,6 +4,8 @@ import { KRPC } from '~/src/krpc/krpc.ts'
 import TransactionManager, { Request } from '~/src/krpc/transaction_manager.ts'
 import TokenManager from '~/src/krpc/token_manager.ts'
 import LocalNode from '~/src/local_node.ts'
+import Node from '~/src/node.ts'
+import Peer from '~/src/peer.ts'
 import RoutingTable from '~/src/routing_table.ts'
 import logger from '~/src/util/log.ts'
 import { NetUtil } from '@deno-torrent/toolkit'
@@ -26,6 +28,52 @@ export type DHTOptions = {
   /** Start bootstrap requests during construction. Defaults to true. */
   autoBootstrap?: boolean
 }
+
+/** Controls one bounded iterative BEP-5 peer lookup. */
+export type GetPeersOptions = {
+  signal?: AbortSignal
+  /** Overall lookup deadline. Defaults to 15 seconds. */
+  timeoutMs?: number
+  /** Deadline for one KRPC exchange. Defaults to 3 seconds. */
+  queryTimeoutMs?: number
+  /** Simultaneous KRPC queries. Defaults to BEP-5's recommended alpha of 3. */
+  concurrency?: number
+  /** Maximum nodes contacted in one lookup. Defaults to 64. */
+  maxQueries?: number
+  /** Stop after this many unique peers. Defaults to 200. */
+  maxPeers?: number
+  /** Called once for each newly discovered endpoint. */
+  onPeer?: (peer: Peer) => void | Promise<void>
+}
+
+/** Completed result of a high-level DHT peer lookup. */
+export type GetPeersResult = {
+  peers: Peer[]
+  queriedNodes: number
+  respondingNodes: number
+  timedOut: boolean
+  exhausted: boolean
+  durationMs: number
+}
+
+/** Controls announcing the local BitTorrent listening port to the DHT. */
+export type AnnouncePeerOptions = {
+  /** BitTorrent TCP/uTP listening port; defaults to the DHT node port. */
+  port?: number
+  signal?: AbortSignal
+  timeoutMs?: number
+  queryTimeoutMs?: number
+  maxNodes?: number
+}
+
+/** Result of announcing to the nodes that issued fresh tokens. */
+export type AnnouncePeerResult = {
+  attempted: number
+  announced: number
+  failures: string[]
+}
+
+type StoredAnnounceToken = { node: Node; token: Uint8Array; receivedAt: number }
 
 /**
  * the host node of the dht network
@@ -53,6 +101,8 @@ export default class DHT {
   #krpc: KRPC // the krpc protocol
   readonly #routingTable: RoutingTable
   readonly #infoHashManager: InfoHashManager
+  readonly #announceTokens = new Map<string, Map<string, StoredAnnounceToken>>()
+  #closed = false
 
   private constructor(options: DHTOptions, localNode: LocalNode, bootstrapNodes: BootstrapNode[]) {
     const { port, bindAddress = '0.0.0.0', autoBootstrap = true } = options
@@ -191,12 +241,217 @@ export default class DHT {
   }
 
   /**
+   * Iteratively query the closest known nodes until the candidate set is
+   * exhausted, a resource bound is reached, or the operation is cancelled.
+   */
+  async getPeers(infoHash: Uint8Array, options: GetPeersOptions = {}): Promise<GetPeersResult> {
+    this.#assertOpen()
+    if (!Id.isValidId(infoHash)) throw new RangeError('infoHash must contain exactly 20 bytes')
+    options.signal?.throwIfAborted()
+    const timeoutMs = positiveNumber(options.timeoutMs ?? 15_000, 'timeoutMs')
+    const queryTimeoutMs = positiveNumber(options.queryTimeoutMs ?? 3_000, 'queryTimeoutMs')
+    const concurrency = positiveInteger(options.concurrency ?? 3, 'concurrency')
+    const maxQueries = positiveInteger(options.maxQueries ?? 64, 'maxQueries')
+    const maxPeers = positiveInteger(options.maxPeers ?? 200, 'maxPeers')
+    const startedAt = Date.now()
+    const deadline = startedAt + timeoutMs
+    const target = Id.fromUnit8Array(infoHash)
+    const hashKey = bytesToHex(infoHash)
+    const candidates = new Map<string, Node>()
+    const queried = new Set<string>()
+    const peers = new Map<string, Peer>()
+    let respondingNodes = 0
+
+    const addCandidates = (nodes: readonly Node[]) => {
+      for (const node of nodes) {
+        if (node.id.equals(this.#routingTable.localNode.id)) continue
+        candidates.set(node.id.toString(), node)
+        this.#routingTable.add(node)
+      }
+    }
+
+    if (this.#routingTable.nodeCount === 0) {
+      await this.pingBootstrapNodes()
+      const bootstrapDeadline = Math.min(deadline, Date.now() + Math.min(queryTimeoutMs, 2_000))
+      while (this.#routingTable.nodeCount === 0 && Date.now() < bootstrapDeadline) {
+        await delay(Math.min(25, bootstrapDeadline - Date.now()), options.signal)
+      }
+    }
+    addCandidates(this.#routingTable.findClosestNodes(target, maxQueries))
+
+    while (queried.size < maxQueries && peers.size < maxPeers && Date.now() < deadline) {
+      options.signal?.throwIfAborted()
+      addCandidates(this.#routingTable.findClosestNodes(target, maxQueries))
+      const batch = [...candidates.values()]
+        .filter((node) => !queried.has(node.id.toString()))
+        .sort((left, right) => compareDistance(left, right, target))
+        .slice(0, Math.min(concurrency, maxQueries - queried.size))
+      if (batch.length === 0) break
+      for (const node of batch) queried.add(node.id.toString())
+
+      const remaining = deadline - Date.now()
+      const results = await Promise.allSettled(
+        batch.map((node) =>
+          this.#krpc.queryGetPeers(node, infoHash, {
+            signal: options.signal,
+            timeoutMs: Math.max(1, Math.min(queryTimeoutMs, remaining)),
+          })
+        ),
+      )
+      options.signal?.throwIfAborted()
+
+      for (const result of results) {
+        if (result.status === 'rejected') continue
+        respondingNodes++
+        const response = result.value
+        this.#storeAnnounceToken(hashKey, response.node, response.token)
+        addCandidates(response.nodes)
+        for (const peer of response.peers) {
+          const key = `${peer.addr}\0${peer.port}`
+          if (peers.has(key)) continue
+          peers.set(key, peer)
+          await options.onPeer?.(peer)
+          if (peers.size >= maxPeers) break
+        }
+      }
+    }
+
+    const timedOut = Date.now() >= deadline
+    const hasUnqueriedCandidate = [...candidates.values()].some((node) => !queried.has(node.id.toString()))
+    return {
+      peers: [...peers.values()],
+      queriedNodes: queried.size,
+      respondingNodes,
+      timedOut,
+      exhausted: !timedOut && !hasUnqueriedCandidate,
+      durationMs: Date.now() - startedAt,
+    }
+  }
+
+  /**
+   * Announce a BitTorrent listening port using fresh per-node tokens collected
+   * by {@link getPeers}. A lookup is performed automatically when necessary.
+   */
+  async announcePeer(infoHash: Uint8Array, options: AnnouncePeerOptions = {}): Promise<AnnouncePeerResult> {
+    this.#assertOpen()
+    if (!Id.isValidId(infoHash)) throw new RangeError('infoHash must contain exactly 20 bytes')
+    options.signal?.throwIfAborted()
+    const port = options.port ?? this.#routingTable.localNode.port
+    if (!NetUtil.isNetPort(port) || port === 0) throw new RangeError('port must be in range [1, 65535]')
+    const timeoutMs = positiveNumber(options.timeoutMs ?? 15_000, 'timeoutMs')
+    const queryTimeoutMs = positiveNumber(options.queryTimeoutMs ?? 3_000, 'queryTimeoutMs')
+    const maxNodes = positiveInteger(options.maxNodes ?? 8, 'maxNodes')
+    const hashKey = bytesToHex(infoHash)
+    let tokens = this.#freshTokens(hashKey)
+    if (tokens.length === 0) {
+      await this.getPeers(infoHash, {
+        signal: options.signal,
+        timeoutMs,
+        queryTimeoutMs,
+        maxQueries: Math.max(maxNodes, 8),
+      })
+      tokens = this.#freshTokens(hashKey)
+    }
+    tokens = tokens.slice(0, maxNodes)
+
+    const results = await Promise.allSettled(
+      tokens.map(({ node, token }) =>
+        this.#krpc.queryAnnouncePeer(node, infoHash, token, port, {
+          signal: options.signal,
+          timeoutMs: queryTimeoutMs,
+        })
+      ),
+    )
+    options.signal?.throwIfAborted()
+    const failures: string[] = []
+    let announced = 0
+    results.forEach((result, index) => {
+      if (result.status === 'fulfilled') {
+        announced++
+      } else {
+        const node = tokens[index]!.node
+        failures.push(`${node.addr}:${node.port}: ${errorMessage(result.reason)}`)
+      }
+    })
+    return { attempted: tokens.length, announced, failures }
+  }
+
+  #storeAnnounceToken(infoHash: string, node: Node, token: Uint8Array): void {
+    let tokens = this.#announceTokens.get(infoHash)
+    if (!tokens) {
+      tokens = new Map()
+      this.#announceTokens.set(infoHash, tokens)
+    }
+    tokens.set(node.id.toString(), { node, token: token.slice(), receivedAt: Date.now() })
+  }
+
+  #freshTokens(infoHash: string): StoredAnnounceToken[] {
+    const tokens = this.#announceTokens.get(infoHash)
+    if (!tokens) return []
+    const oldest = Date.now() - 5 * 60 * 1000
+    for (const [nodeId, entry] of tokens) {
+      if (entry.receivedAt < oldest) tokens.delete(nodeId)
+    }
+    if (tokens.size === 0) this.#announceTokens.delete(infoHash)
+    return [...tokens.values()]
+  }
+
+  #assertOpen(): void {
+    if (this.#closed) throw new Error('DHT node is closed')
+  }
+
+  /**
    * Close the DHT node and release its UDP socket.
    *
    * Calling this method more than once is safe. The instance must not be used
    * to send requests after it has been closed.
    */
   close(): void {
+    if (this.#closed) return
+    this.#closed = true
+    this.#announceTokens.clear()
     this.#krpc.close()
   }
+}
+
+function positiveNumber(value: number, name: string): number {
+  if (!Number.isFinite(value) || value <= 0) throw new RangeError(`${name} must be greater than zero`)
+  return value
+}
+
+function positiveInteger(value: number, name: string): number {
+  if (!Number.isSafeInteger(value) || value <= 0) throw new RangeError(`${name} must be a positive integer`)
+  return value
+}
+
+function compareDistance(left: Node, right: Node, target: Id): number {
+  const leftDistance = left.id.bits.xor(target.bits)
+  const rightDistance = right.id.bits.xor(target.bits)
+  if (leftDistance.equals(rightDistance)) return 0
+  return leftDistance.lessThan(rightDistance) ? -1 : 1
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  if (milliseconds <= 0) return Promise.resolve()
+  signal?.throwIfAborted()
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(done, milliseconds)
+    function done() {
+      signal?.removeEventListener('abort', aborted)
+      resolve()
+    }
+    function aborted() {
+      clearTimeout(timer)
+      reject(signal?.reason ?? new DOMException('The operation was aborted', 'AbortError'))
+    }
+    signal?.addEventListener('abort', aborted, { once: true })
+  })
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
 }

@@ -1,5 +1,15 @@
 import { QueryType } from '~/src/message_factory.ts'
 import logger from '~/src/util/log.ts'
+import type Node from '~/src/node.ts'
+import type Peer from '~/src/peer.ts'
+
+/** Parsed result of one BEP-5 get_peers exchange. */
+export type GetPeersQueryResult = {
+  node: Node
+  peers: Peer[]
+  nodes: Node[]
+  token: Uint8Array
+}
 
 export type Request = {
   type: QueryType
@@ -8,6 +18,8 @@ export type Request = {
   infoHash?: Uint8Array // only for get_peers query and announce_peer query
   /** Internal completion hook used by bounded liveness probes. */
   onResult?: (reachable: boolean) => void
+  /** Internal completion hook used by the high-level iterative lookup API. */
+  onGetPeersResult?: (result: GetPeersQueryResult) => void
 }
 
 /**
