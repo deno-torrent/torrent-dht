@@ -13,3 +13,14 @@ Deno.test('LocalNode.createLocalNode - explicit address and ID avoid automatic d
   assertEquals(node.addr, '203.0.113.10')
   assertEquals(node.port, 6881)
 })
+
+Deno.test({
+  name: 'LocalNode.createLocalNode - default ID does not require system information',
+  permissions: { net: false, sys: false },
+  fn: async () => {
+    const node = await LocalNode.createLocalNode(6881, { publicAddress: '203.0.113.10' })
+
+    assertEquals(node.id.bits.bytes.length, Id.BYTES_LENGTH)
+    assertEquals(node.addr, '203.0.113.10')
+  },
+})

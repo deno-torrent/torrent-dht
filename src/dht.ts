@@ -21,7 +21,7 @@ export type DHTOptions = {
   bindAddress?: string
   /** IPv4 address advertised in compact node records. Omit to discover it through ipify. */
   publicAddress?: string
-  /** Stable node ID. Omit to derive one from a network interface MAC address. */
+  /** Stable node ID. Omit to generate a random ID without reading host network interfaces. */
   nodeId?: Id
   /** Bootstrap endpoints. Defaults to the public router list. */
   bootstrapNodes?: BootstrapNode[]

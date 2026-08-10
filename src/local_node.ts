@@ -26,7 +26,7 @@ export default class LocalNode extends Node {
     port: number,
     options: { publicAddress?: string; nodeId?: Id } = {},
   ): Promise<LocalNode> {
-    const id = options.nodeId ?? Id.createIdByMacAddr()
+    const id = options.nodeId ?? Id.random()
     const addr = options.publicAddress ?? await getIP()
     return new LocalNode(id, port, addr)
   }
