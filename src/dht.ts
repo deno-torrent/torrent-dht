@@ -19,7 +19,7 @@ export type DHTOptions = {
   port: number
   /** Local IPv4 interface to bind. Defaults to all interfaces. */
   bindAddress?: string
-  /** IPv4 address advertised in compact node records. Omit to discover it through ipify. */
+  /** Optional IPv4 address advertised in compact node records. */
   publicAddress?: string
   /** Stable node ID. Omit to generate a random ID without reading host network interfaces. */
   nodeId?: Id
@@ -176,7 +176,7 @@ export default class DHT {
       throw new TypeError('at least one bootstrap node is required')
     }
 
-    const localNode = await LocalNode.createLocalNode(port, { publicAddress, nodeId })
+    const localNode = await LocalNode.createLocalNode(port, { publicAddress, bindAddress, nodeId })
 
     return new DHT(options, localNode, [...bootstrapNodes])
   }

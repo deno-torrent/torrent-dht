@@ -138,11 +138,12 @@ Call `dht.close()` when the node is no longer needed so its UDP socket is releas
 ## Error Handling
 
 Invalid argument types use `TypeError`; numeric values outside their supported range use `RangeError`. Network and
-environment initialization failures reject `DHT.listen()` with an `Error`. Public IPv4 discovery is validated and
-limited to 10 seconds, so environments that block HTTPS fail instead of leaving startup pending. Always release a
-successfully created node:
+environment initialization failures reject `DHT.listen()` with an `Error`. DHT startup does not depend on an external
+HTTPS public-IP service: when `publicAddress` is omitted, the local node uses `bindAddress` (or `0.0.0.0`) while remote
+nodes learn the sender address from UDP packets. Always release a successfully created node.
 
-Set `publicAddress` to skip ipify entirely, and `bindAddress` to choose the local IPv4 interface:
+Set `publicAddress` when a known address should be retained in local compact-node projections, and `bindAddress` to
+choose the local IPv4 interface:
 
 ```ts
 const dht = await DHT.listen({
