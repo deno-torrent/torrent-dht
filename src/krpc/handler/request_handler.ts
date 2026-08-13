@@ -49,7 +49,9 @@ export default class RequestHandler implements MessageHandler {
         await this.handleAnnouncePeerQueryRequest(reqMsg, reqNode, tid, sender)
         break
       default:
-        logger.error(`unknown query type: ${type}`)
+        // Public nodes commonly probe optional BEPs such as BEP 51 sample_infohashes.
+        // An unsupported extension is a routine capability mismatch, not a local failure.
+        logger.debug(`unsupported query type: ${type}`)
         await sender.sendMessage(
           port,
           addr,
