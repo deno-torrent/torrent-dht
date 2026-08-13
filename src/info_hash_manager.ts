@@ -82,14 +82,6 @@ export default class InfoHashManager {
 
     const prevToken = this.#tokenMap.get(infoHash)
 
-    // check token
-    if (token !== undefined && prevToken && !tokensEqual(prevToken, token)) {
-      logger.error(
-        `the token of ${infoHash} [${token}] is not equal to [${prevToken}], ignore ${peer.addr}:${peer.port}`,
-      )
-      return
-    }
-
     const peerKey = `${peer.addr}\0${peer.port}`
     if (peers?.has(peerKey)) {
       peers.set(peerKey, { peer, lastSeenAt: now })
@@ -164,9 +156,4 @@ export default class InfoHashManager {
 
     return peers
   }
-}
-
-function tokensEqual(left: Uint8Array, right: Uint8Array): boolean {
-  if (left.length !== right.length) return false
-  return left.every((byte, index) => byte === right[index])
 }

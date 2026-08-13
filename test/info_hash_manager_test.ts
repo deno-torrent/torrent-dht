@@ -30,16 +30,16 @@ Deno.test('InfoHashManager.findToken - 返回对应的 token', () => {
   assertEquals(mgr.findToken(hash), token)
 })
 
-Deno.test('InfoHashManager.add - token 不匹配时忽略新 Peer', () => {
+Deno.test('InfoHashManager.add - 接受不同响应节点为同一 info hash 返回的不同 token', () => {
   const hash = 'cccccccccccccccccccccccccccccccccccccccc'
   const peer1 = new Peer(1111, '1.1.1.1')
   const peer2 = new Peer(2222, '2.2.2.2')
 
   mgr.add(hash, peer1, tokenBytes('token-a'))
-  mgr.add(hash, peer2, tokenBytes('token-b')) // 与已有 token 不匹配，应被忽略
+  mgr.add(hash, peer2, tokenBytes('token-b'))
 
   const result = mgr.find(hash)
-  assertEquals(result!.length, 1)
+  assertEquals(result!.length, 2)
 })
 
 Deno.test('InfoHashManager.addList - 批量添加 Peer', () => {
