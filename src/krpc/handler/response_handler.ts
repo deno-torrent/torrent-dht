@@ -89,7 +89,7 @@ export default class ResponseHandler implements MessageHandler {
     logger.info(`[<======RESPONSE-PING-${tid}] received from ${respNode.addr}:${respNode.port}`)
 
     // add the node into the routing table
-    if (!await this.addNode(respNode)) {
+    if (!await this.addNode(respNode) && !this.routingTable.findNode(respNode.id)) {
       logger.error(`[${tid}] add node ${respNode} to routing table failed`)
     }
   }
@@ -118,13 +118,13 @@ export default class ResponseHandler implements MessageHandler {
 
     for (const nodeBytes of nodesBytesList) {
       const node = Node.fromCompact(nodeBytes)
-      if (!await this.addNode(node)) {
+      if (!await this.addNode(node) && !this.routingTable.findNode(node.id)) {
         logger.error(`[${tid}] insert node ${node} to routing table failed`)
       }
     }
 
     // update the response node
-    if (!await this.addNode(respNode)) {
+    if (!await this.addNode(respNode) && !this.routingTable.findNode(respNode.id)) {
       logger.error(`[${tid}] add node ${respNode} to routing table failed`)
     }
   }
@@ -155,11 +155,6 @@ export default class ResponseHandler implements MessageHandler {
     const nodesBytes = response.r?.nodes
     // values means the response node has peers; values is a list of compact peer addresses
     const peersBytesList = response.r?.values
-
-    if (!token) {
-      logger.error(`[${tid}] invalid token: ${token}`)
-      return
-    }
 
     // check peerBytes
     if (peersBytesList && peersBytesList.some((bytes) => bytes.length !== COMPAT_ADDR_V4_LEN)) {
@@ -219,18 +214,23 @@ export default class ResponseHandler implements MessageHandler {
     }
 
     // update the response node
-    if (!await this.addNode(respNode)) {
+    if (!await this.addNode(respNode) && !this.routingTable.findNode(respNode.id)) {
       logger.error(`[${tid}] add node ${respNode} to routing table failed`)
     }
 
-    request.onGetPeersResult?.({ node: respNode, peers, nodes, token: token.slice() })
+    request.onGetPeersResult?.({
+      node: respNode,
+      peers,
+      nodes,
+      ...(token ? { token: token.slice() } : {}),
+    })
   }
 
   private async handleAnnouncePeerResponse(respNode: Node, tid: string) {
     logger.info(`[<======RESPONSE-ANNOUNCE_PEER-${tid}] received from ${respNode.addr}:${respNode.port}`)
 
     // update the response node
-    if (!await this.addNode(respNode)) {
+    if (!await this.addNode(respNode) && !this.routingTable.findNode(respNode.id)) {
       logger.error(`[${tid}] add node ${respNode} to routing table failed`)
     }
   }

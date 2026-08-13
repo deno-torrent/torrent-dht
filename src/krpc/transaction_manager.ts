@@ -8,7 +8,8 @@ export type GetPeersQueryResult = {
   node: Node
   peers: Peer[]
   nodes: Node[]
-  token: Uint8Array
+  /** Optional because some useful public nodes omit the BEP-5 announce token. */
+  token?: Uint8Array
 }
 
 export type Request = {

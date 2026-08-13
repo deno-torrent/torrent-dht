@@ -43,10 +43,10 @@ export default class InfoHashManager {
     return token?.slice()
   }
 
-  /** Add multiple peers using the same info hash and token. */
-  addList(infoHash: string, peers: Peer[], token: Uint8Array): void {
+  /** Add multiple peers, retaining an announce token when the responder supplied one. */
+  addList(infoHash: string, peers: Peer[], token?: Uint8Array): void {
     for (const peer of peers) {
-      this.add(infoHash, peer, token)
+      this.#addPeer(infoHash, peer, token)
     }
   }
 

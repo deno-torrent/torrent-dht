@@ -105,7 +105,7 @@ export default class Bucket {
 
     if (existing) {
       existing.update(node.port, node.addr)
-      logger.warn(`node ${node.id.toString()} is already in the bucket, updating last active time`)
+      logger.debug(`node ${node.id.toString()} is already in the bucket, updating last active time`)
       return false
     }
 

@@ -104,6 +104,7 @@ export default class DHT {
   readonly #routingTable: RoutingTable
   readonly #infoHashManager: InfoHashManager
   readonly #announceTokens = new Map<string, Map<string, StoredAnnounceToken>>()
+  #bootstrapInFlight?: Promise<void>
   #closed = false
 
   private constructor(options: DHTOptions, localNode: LocalNode, bootstrapNodes: BootstrapNode[]) {
@@ -187,7 +188,17 @@ export default class DHT {
    * A DNS or UDP failure from one endpoint is logged and does not prevent the
    * remaining endpoints from being attempted.
    */
-  async pingBootstrapNodes(): Promise<void> {
+  pingBootstrapNodes(): Promise<void> {
+    if (this.#bootstrapInFlight) return this.#bootstrapInFlight
+    const operation = this.#contactBootstrapNodes()
+    const tracked = operation.finally(() => {
+      if (this.#bootstrapInFlight === tracked) this.#bootstrapInFlight = undefined
+    })
+    this.#bootstrapInFlight = tracked
+    return tracked
+  }
+
+  async #contactBootstrapNodes(): Promise<void> {
     logger.info(`start pingBootstrapNodes`)
     for (const bootstrapNode of this.#bootstrapNodes) {
       logger.info(`ping the bootstrap node ${bootstrapNode.addr}:${bootstrapNode.port}`)
@@ -307,7 +318,7 @@ export default class DHT {
         if (result.status === 'rejected') continue
         respondingNodes++
         const response = result.value
-        this.#storeAnnounceToken(hashKey, response.node, response.token)
+        if (response.token) this.#storeAnnounceToken(hashKey, response.node, response.token)
         addCandidates(response.nodes)
         for (const peer of response.peers) {
           const key = `${peer.addr}\0${peer.port}`

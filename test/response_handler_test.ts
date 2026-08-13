@@ -205,21 +205,30 @@ Deno.test('ResponseHandler - get_peers 响应含 nodes 时发起二轮 get_peers
   assertEquals(sender.sentGetPeers[0]?.infoHash, infoHash)
 })
 
-Deno.test('ResponseHandler - get_peers 响应缺少 token 时静默丢弃', async () => {
+Deno.test('ResponseHandler - get_peers 响应缺少 token 时仍接收 peer', async () => {
   const handler = responseHandler
   const infoHash = makeInfoHash('gp-no-token')
-  // 合法 TID，但 r 中不携带 token
-  const tid = mgr.create({ type: QueryType.GET_PEERS, addr: REMOTE_ADDR, port: REMOTE_PORT, infoHash })
+  const infoHashHex = encodeHex(infoHash)
+  const peerCompact = new Uint8Array([21, 21, 21, 21, 0x1b, 0xe5])
+  let resultToken: Uint8Array | undefined
+  const tid = mgr.create({
+    type: QueryType.GET_PEERS,
+    addr: REMOTE_ADDR,
+    port: REMOTE_PORT,
+    infoHash,
+    onGetPeersResult: (result) => {
+      resultToken = result.token
+    },
+  })
   const sender = new MockSender()
   await handler.handle(
-    { t: tid, y: MessageType.RESPONSE, r: { id: RESP_NODE_ID, values: [] } },
+    { t: tid, y: MessageType.RESPONSE, r: { id: RESP_NODE_ID, values: [peerCompact] } },
     REMOTE_ADDR,
     REMOTE_PORT,
     sender,
   )
-  // r.token 缺失，消息被丢弃，不会发出任何请求
-  assertEquals(sender.sentGetPeers.length, 0)
-  assertEquals(sender.sentMessages.length, 0)
+  assertEquals(infoHashManager.find(infoHashHex)?.length, 1)
+  assertEquals(resultToken, undefined)
 })
 
 // ─── announce_peer 响应 ───────────────────────────────────────────────────────
