@@ -430,7 +430,7 @@ export default class MessageFactory {
    * 构造 get_peers 响应消息
    *
    * 当存在 Peer 时返回 `values`；否则返回 `nodes`（最近节点）。
-   * `peers` 和 `nodes` 至少须提供其一。
+   * `peers` 和 `nodes` 至少须提供其一；空 `nodes` 表示当前没有更近节点。
    *
    * @param tid   事务 ID
    * @param peers Peer 列表（可选）
@@ -445,7 +445,7 @@ export default class MessageFactory {
     token?: Uint8Array,
   ): MessageFactory {
     const hasPeers = peers && peers.length > 0
-    const hasNodes = nodes && nodes.length > 0
+    const hasNodes = nodes !== undefined
 
     if (!hasPeers && !hasNodes) {
       throw new Error('must provide peers or nodes')

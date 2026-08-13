@@ -145,14 +145,10 @@ Deno.test('MessageFactory - opaque binary token survives bencode round trip', as
   assertEquals((await MessageFactory.decode(encoded))?.a?.token, token)
 })
 
-Deno.test('MessageFactory.responseGetPeers - peers/nodes 均为空时抛出异常', () => {
-  let threw = false
-  try {
-    MessageFactory.responseGetPeers('kk', localId)
-  } catch {
-    threw = true
-  }
-  assertEquals(threw, true)
+Deno.test('MessageFactory.responseGetPeers - 空 nodes 生成合法的无结果响应', () => {
+  const msg = MessageFactory.responseGetPeers('kk', localId, undefined, []).message()
+  assertEquals(msg.y, MessageType.RESPONSE)
+  assertEquals(msg.r?.nodes?.length, 0)
 })
 
 // ─── bencode / decode 往返序列化 ─────────────────────────────────────────────

@@ -113,7 +113,7 @@ Deno.test('RequestHandler - find_node target 长度非 20 时返回 PROTOCOL 错
   assertEquals(sender.getMessageAt(0)?.e?.[0], ErrorType.PROTOCOL)
 })
 
-Deno.test('RequestHandler - find_node 路由表为空时返回 GENERIC 错误', async () => {
+Deno.test('RequestHandler - find_node 路由表为空时返回空节点列表', async () => {
   // 此时路由表只有 localNode，findClosestNodes 对随机 target 可能返回空
   // 先确保路由表中没有其他节点
   routingTable.getAllNodes().forEach((n) => routingTable.remove(n))
@@ -131,7 +131,8 @@ Deno.test('RequestHandler - find_node 路由表为空时返回 GENERIC 错误', 
     REMOTE_PORT,
     sender,
   )
-  assertEquals(sender.getMessageAt(0)?.e?.[0], ErrorType.GENERIC)
+  assertEquals(sender.getMessageAt(0)?.y, MessageType.RESPONSE)
+  assertEquals(sender.getMessageAt(0)?.r?.nodes?.length, 0)
 })
 
 Deno.test('RequestHandler - find_node 有最近节点时返回 RESPONSE', async () => {
@@ -194,7 +195,7 @@ Deno.test('RequestHandler - get_peers 无 peers 但有最近节点时返回含 n
   assertEquals(msg?.r?.token instanceof Uint8Array, true)
 })
 
-Deno.test('RequestHandler - get_peers 无 peers 且路由表为空时返回 GENERIC 错误', async () => {
+Deno.test('RequestHandler - get_peers 无 peers 且路由表为空时返回 token 和空节点列表', async () => {
   // 清空路由表
   routingTable.getAllNodes().forEach((n) => routingTable.remove(n))
 
@@ -208,7 +209,9 @@ Deno.test('RequestHandler - get_peers 无 peers 且路由表为空时返回 GENE
     REMOTE_PORT,
     sender,
   )
-  assertEquals(sender.getMessageAt(0)?.e?.[0], ErrorType.GENERIC)
+  assertEquals(sender.getMessageAt(0)?.y, MessageType.RESPONSE)
+  assertEquals(sender.getMessageAt(0)?.r?.nodes?.length, 0)
+  assertEquals(sender.getMessageAt(0)?.r?.token instanceof Uint8Array, true)
 })
 
 // ─── announce_peer ────────────────────────────────────────────────────────────

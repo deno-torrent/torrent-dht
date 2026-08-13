@@ -12,13 +12,12 @@ export default class ErrorResponseHandler implements MessageHandler {
   }
 
   handle(response: Message, address: string, port: number, _client: Sender): Promise<void> {
-    logger.warn(`[<======ERROR] received error response from ${address}:${port}`)
-
     const { e: error, t: tid } = response
 
-    // tid 不存在或对应事务已失效（非我方发出的请求），直接忽略
+    // Public DHT replies can outlive our bounded transaction window. A late
+    // error cannot affect local state and is not evidence of a remote fault.
     if (typeof tid !== 'string' || !this.transactionManager.isValid(tid)) {
-      logger.warn(`[${tid}] received error for unknown or expired transaction from ${address}:${port}`)
+      logger.debug(`[${tid}] received error for unknown or expired transaction from ${address}:${port}`)
       return Promise.resolve()
     }
 

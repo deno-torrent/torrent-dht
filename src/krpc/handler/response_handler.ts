@@ -27,16 +27,16 @@ export default class ResponseHandler implements MessageHandler {
   async handle(response: Message, addr: string, port: number, sender: Sender): Promise<void> {
     const { t: tid, r: data, q: type } = response
 
-    // deno-torrent currently issues textual transaction IDs. Binary IDs are
-    // valid for inbound queries, but cannot match one of our local requests.
+    // Binary/expired transaction IDs commonly arrive after the bounded request
+    // timed out. They are safely ignored and are not a remote protocol fault.
     if (typeof tid !== 'string') {
-      logger.warn(`received a response with an unknown binary transaction id from ${addr}:${port}`)
+      logger.debug(`received a response with an unknown binary transaction id from ${addr}:${port}`)
       return
     }
 
     // check tid is valid
     if (!this.transactionManager.isValid(tid)) {
-      logger.warn(`[${tid}] received an invalid tid, drop the message from ${addr}:${port}`)
+      logger.debug(`[${tid}] received an expired or unknown tid, drop the message from ${addr}:${port}`)
       return
     }
 

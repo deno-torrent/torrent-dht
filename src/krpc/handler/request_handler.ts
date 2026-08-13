@@ -101,13 +101,9 @@ export default class RequestHandler implements MessageHandler {
     const closestNodes = this.routingTable.findClosestNodes(targetId, 8)
 
     if (!closestNodes || closestNodes.length === 0) {
-      logger.error(`[${tid}]: not found closest nodes for target id: ${targetId}`)
-      await sender.sendMessage(
-        reqNode.port,
-        reqNode.addr,
-        MessageFactory.responseError(tid, ErrorType.GENERIC, `not found closest nodes for target id: ${targetId}`),
-      )
-      return
+      // An empty routing table is a valid transient state during bootstrap. Return
+      // a well-formed empty result instead of reporting a query failure.
+      logger.debug(`[${tid}]: no closest nodes for target id: ${targetId}`)
     } else {
       logger.debug(`[${tid}]: find ${closestNodes.length} closest nodes for target id: ${targetId}`)
     }
@@ -116,7 +112,7 @@ export default class RequestHandler implements MessageHandler {
     await sender.sendMessage(
       reqNode.port,
       reqNode.addr,
-      MessageFactory.responseFindNode(tid, this.routingTable.localNode.id, closestNodes),
+      MessageFactory.responseFindNode(tid, this.routingTable.localNode.id, closestNodes ?? []),
     )
   }
 
@@ -151,12 +147,10 @@ export default class RequestHandler implements MessageHandler {
         // return closest nodes
         response = MessageFactory.responseGetPeers(tid, this.routingTable.localNode.id, undefined, closestNodes, token)
       } else {
-        logger.error(`[${tid}]: can not find peers or nodes for info hash: ${infoHashHex}}`)
-        response = MessageFactory.responseError(
-          tid,
-          ErrorType.GENERIC,
-          `can not find nodes for target id: can not find peers or nodes for info hash: ${infoHashHex}}`,
-        )
+        // Keep the issued token even when this bootstrapping node has no closer
+        // contacts yet. Empty nodes is a normal negative result, not a KRPC error.
+        logger.debug(`[${tid}]: no peers or closer nodes for info hash: ${infoHashHex}`)
+        response = MessageFactory.responseGetPeers(tid, this.routingTable.localNode.id, undefined, [], token)
       }
     }
 
