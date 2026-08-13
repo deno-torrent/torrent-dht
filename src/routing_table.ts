@@ -232,7 +232,7 @@ export default class RoutingTable {
    * @returns 按距离从近到远排序的节点列表
    */
   findClosestNodes(targetNodeId: Id, count = 8): Node[] {
-    logger.info(`[findClosestNodes] total node count is ${this.nodeCount}`)
+    logger.debug(`[findClosestNodes] total node count is ${this.nodeCount}`)
 
     const nodes = this.getAllNodes().sort((a, b) =>
       a.id.bits.xor(targetNodeId.bits).lessThan(b.id.bits.xor(targetNodeId.bits)) ? -1 : 1

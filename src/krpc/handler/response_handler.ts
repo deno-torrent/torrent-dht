@@ -93,7 +93,7 @@ export default class ResponseHandler implements MessageHandler {
   }
 
   private async handlePingResponse(respNode: Node, tid: string) {
-    logger.info(`[<======RESPONSE-PING-${tid}] received from ${respNode.addr}:${respNode.port}`)
+    logger.debug(`[<======RESPONSE-PING-${tid}] received from ${respNode.addr}:${respNode.port}`)
 
     // add the node into the routing table
     if (!await this.addNode(respNode) && !this.routingTable.findNode(respNode.id)) {
@@ -102,7 +102,7 @@ export default class ResponseHandler implements MessageHandler {
   }
 
   private async handleFindNodeResponse(response: Message, respNode: Node, tid: string) {
-    logger.info(`[<======RESPONSE-FIND_NODE-${tid}] received from ${respNode.addr}:${respNode.port}`)
+    logger.debug(`[<======RESPONSE-FIND_NODE-${tid}] received from ${respNode.addr}:${respNode.port}`)
 
     const nodesBytes = response.r?.nodes
 
@@ -143,7 +143,7 @@ export default class ResponseHandler implements MessageHandler {
     tid: string,
     sender: Sender,
   ) {
-    logger.info(`[<======RESPONSE-GET_PEERS-${tid}] received from ${respNode.addr}:${respNode.port}`)
+    logger.debug(`[<======RESPONSE-GET_PEERS-${tid}] received from ${respNode.addr}:${respNode.port}`)
 
     // get infoHash from request message
     const infoHash = request.infoHash
@@ -182,7 +182,7 @@ export default class ResponseHandler implements MessageHandler {
         }
       }
 
-      logger.info(
+      logger.debug(
         `[${tid}] received ${peersBytesList.length} peers for info hash: ${
           BytesUtil.bytes2HexStr(
             infoHash,
@@ -197,7 +197,7 @@ export default class ResponseHandler implements MessageHandler {
         logger.error(`[${tid}] invalid compact nodes length: ${nodesBytes.length}`)
         return
       }
-      logger.info(
+      logger.debug(
         `[${tid}] received ${nodesBytes.length / COMPAT_NODE_LEN} nodes for info hash: ${
           BytesUtil.bytes2HexStr(
             infoHash,
@@ -234,7 +234,7 @@ export default class ResponseHandler implements MessageHandler {
   }
 
   private async handleAnnouncePeerResponse(respNode: Node, tid: string) {
-    logger.info(`[<======RESPONSE-ANNOUNCE_PEER-${tid}] received from ${respNode.addr}:${respNode.port}`)
+    logger.debug(`[<======RESPONSE-ANNOUNCE_PEER-${tid}] received from ${respNode.addr}:${respNode.port}`)
 
     // update the response node
     if (!await this.addNode(respNode) && !this.routingTable.findNode(respNode.id)) {

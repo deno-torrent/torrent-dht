@@ -60,7 +60,7 @@ export default class RequestHandler implements MessageHandler {
 
   // handle the ping query request from other node
   async handlePingQueryRequest(reqMsg: Message, reqNode: Node, tid: TransactionId, sender: Sender) {
-    logger.info(`[<======QUERY-PING-${reqMsg.q}] received from ${reqNode.addr}:${reqNode.port}`)
+    logger.debug(`[<======QUERY-PING-${reqMsg.q}] received from ${reqNode.addr}:${reqNode.port}`)
 
     // return local node id
     const response = MessageFactory.responsePing(tid, this.routingTable.localNode.id)
@@ -69,7 +69,7 @@ export default class RequestHandler implements MessageHandler {
   }
 
   async handleFindNodeQueryRequest(reqMsg: Message, reqNode: Node, tid: TransactionId, sender: Sender) {
-    logger.info(`[<======QUERY-FIND_NODE-${reqMsg.q}] received from ${reqNode.addr}:${reqNode.port}`)
+    logger.debug(`[<======QUERY-FIND_NODE-${reqMsg.q}] received from ${reqNode.addr}:${reqNode.port}`)
 
     // find closest nodes from k-buckets by request target node id
     const targetIdBytes = reqMsg.a?.target
@@ -107,7 +107,7 @@ export default class RequestHandler implements MessageHandler {
       )
       return
     } else {
-      logger.info(`[${tid}]: find ${closestNodes.length} closest nodes for target id: ${targetId}`)
+      logger.debug(`[${tid}]: find ${closestNodes.length} closest nodes for target id: ${targetId}`)
     }
 
     // response to request node
@@ -119,7 +119,7 @@ export default class RequestHandler implements MessageHandler {
   }
 
   async handleGetPeersQueryRequest(reqMsg: Message, reqNode: Node, tid: TransactionId, sender: Sender) {
-    logger.info(`[<======QUERY-GET_PEERS-${reqMsg.q}] received from ${reqNode.addr}:${reqNode.port}`)
+    logger.debug(`[<======QUERY-GET_PEERS-${reqMsg.q}] received from ${reqNode.addr}:${reqNode.port}`)
 
     const infoHash = reqMsg.a?.info_hash as Uint8Array
     if (!Id.isValidId(infoHash)) {
@@ -138,14 +138,14 @@ export default class RequestHandler implements MessageHandler {
 
     let response: MessageFactory
     if (peers && peers.length > 0) {
-      logger.info(`[${tid}]: find ${peers.length} peers for info hash: ${infoHashHex}}`)
+      logger.debug(`[${tid}]: find ${peers.length} peers for info hash: ${infoHashHex}}`)
       // return peers
       response = MessageFactory.responseGetPeers(tid, this.routingTable.localNode.id, peers, undefined, token)
     } else {
       const closestNodes = this.routingTable.findClosestNodes(Id.fromUnit8Array(infoHash), 8)
 
       if (closestNodes && closestNodes.length > 0) {
-        logger.info(`[${tid}]: find ${closestNodes.length} nodes for info hash: ${infoHashHex}}`)
+        logger.debug(`[${tid}]: find ${closestNodes.length} nodes for info hash: ${infoHashHex}}`)
         // return closest nodes
         response = MessageFactory.responseGetPeers(tid, this.routingTable.localNode.id, undefined, closestNodes, token)
       } else {
@@ -163,7 +163,7 @@ export default class RequestHandler implements MessageHandler {
   }
 
   async handleAnnouncePeerQueryRequest(reqMsg: Message, reqNode: Node, tid: TransactionId, sender: Sender) {
-    logger.info(`[<======QUERY-ANNOUNCE_PEER-${reqMsg.q}] received from ${reqNode.addr}:${reqNode.port}`)
+    logger.debug(`[<======QUERY-ANNOUNCE_PEER-${reqMsg.q}] received from ${reqNode.addr}:${reqNode.port}`)
 
     const infoHash = reqMsg.a?.info_hash as Uint8Array
     const port = reqMsg.a?.port as number // reqNode download port for bittorrent
