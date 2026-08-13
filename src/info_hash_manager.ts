@@ -28,10 +28,7 @@ export default class InfoHashManager {
    */
   find(infoHash: string): Peer[] | undefined {
     const peers = this.#pruneInfoHash(infoHash, Date.now())
-    if (!peers) {
-      logger.error(`the infoHash ${infoHash} does not exist`)
-      return undefined
-    }
+    if (!peers) return undefined
 
     return Array.from(peers.values(), ({ peer }) => peer)
   }

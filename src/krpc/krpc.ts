@@ -141,9 +141,8 @@ export class KRPC implements Sender {
         const tid = message.t
 
         try {
-          logger.info(`╔============================= HANDLE MESSAGE START ===========================╗${tid}`)
+          logger.debug(`handle message ${tid} from ${address}:${port}`)
           await this.dispatchMessage(message, address, port)
-          logger.info(`╚============================= HANDLE MESSAGE END   ===========================╝${tid}\n`)
         } catch (e) {
           logger.error(`[<======UDP-handlePacket] dispatch message failed: ${e}`)
         }
