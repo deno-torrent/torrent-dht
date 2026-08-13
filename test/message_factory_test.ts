@@ -224,6 +224,17 @@ Deno.test('MessageFactory.decode - 接受 libtorrent 风格的未排序 KRPC 字
   assertEquals(decoded?.r?.id, new TextEncoder().encode('abcdefghijklmnopqrst'))
 })
 
+Deno.test('MessageFactory - arbitrary binary transaction IDs round trip without loss', async () => {
+  const binaryTid = new Uint8Array([0xe4, 0xa8, 0x29, 0x14, 0x8f, 0xde, 0xeb, 0x31])
+  const encoded = await MessageFactory.requestFindNode(binaryTid, nodeId, Id.random()).bencode()
+  const decoded = await MessageFactory.decode(encoded)
+
+  assertEquals(decoded?.t, binaryTid)
+
+  const response = await MessageFactory.responsePing(decoded!.t, localId).bencode()
+  assertEquals((await MessageFactory.decode(response))?.t, binaryTid)
+})
+
 Deno.test('MessageFactory.decode - 拒绝超过 KRPC UDP 上限的数据', async () => {
   assertEquals(await MessageFactory.decode(new Uint8Array(65_508)), undefined)
 })

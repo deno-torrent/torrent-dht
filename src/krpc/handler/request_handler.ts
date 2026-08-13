@@ -3,7 +3,7 @@ import InfoHashManager from '~/src/info_hash_manager.ts'
 import { MessageHandler } from '~/src/krpc/krpc.ts'
 import Sender from '~/src/krpc/sender.ts'
 import TokenManager from '~/src/krpc/token_manager.ts'
-import MessageFactory, { ErrorType, Message, MessageType, QueryType } from '~/src/message_factory.ts'
+import MessageFactory, { ErrorType, Message, MessageType, QueryType, TransactionId } from '~/src/message_factory.ts'
 import Node from '~/src/node.ts'
 import Peer from '~/src/peer.ts'
 import RoutingTable from '~/src/routing_table.ts'
@@ -59,7 +59,7 @@ export default class RequestHandler implements MessageHandler {
   }
 
   // handle the ping query request from other node
-  async handlePingQueryRequest(reqMsg: Message, reqNode: Node, tid: string, sender: Sender) {
+  async handlePingQueryRequest(reqMsg: Message, reqNode: Node, tid: TransactionId, sender: Sender) {
     logger.info(`[<======QUERY-PING-${reqMsg.q}] received from ${reqNode.addr}:${reqNode.port}`)
 
     // return local node id
@@ -68,7 +68,7 @@ export default class RequestHandler implements MessageHandler {
     await sender.sendMessage(reqNode.port, reqNode.addr, response)
   }
 
-  async handleFindNodeQueryRequest(reqMsg: Message, reqNode: Node, tid: string, sender: Sender) {
+  async handleFindNodeQueryRequest(reqMsg: Message, reqNode: Node, tid: TransactionId, sender: Sender) {
     logger.info(`[<======QUERY-FIND_NODE-${reqMsg.q}] received from ${reqNode.addr}:${reqNode.port}`)
 
     // find closest nodes from k-buckets by request target node id
@@ -118,7 +118,7 @@ export default class RequestHandler implements MessageHandler {
     )
   }
 
-  async handleGetPeersQueryRequest(reqMsg: Message, reqNode: Node, tid: string, sender: Sender) {
+  async handleGetPeersQueryRequest(reqMsg: Message, reqNode: Node, tid: TransactionId, sender: Sender) {
     logger.info(`[<======QUERY-GET_PEERS-${reqMsg.q}] received from ${reqNode.addr}:${reqNode.port}`)
 
     const infoHash = reqMsg.a?.info_hash as Uint8Array
@@ -162,7 +162,7 @@ export default class RequestHandler implements MessageHandler {
     await sender.sendMessage(reqNode.port, reqNode.addr, response)
   }
 
-  async handleAnnouncePeerQueryRequest(reqMsg: Message, reqNode: Node, tid: string, sender: Sender) {
+  async handleAnnouncePeerQueryRequest(reqMsg: Message, reqNode: Node, tid: TransactionId, sender: Sender) {
     logger.info(`[<======QUERY-ANNOUNCE_PEER-${reqMsg.q}] received from ${reqNode.addr}:${reqNode.port}`)
 
     const infoHash = reqMsg.a?.info_hash as Uint8Array

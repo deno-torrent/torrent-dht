@@ -17,7 +17,7 @@ export default class ErrorResponseHandler implements MessageHandler {
     const { e: error, t: tid } = response
 
     // tid 不存在或对应事务已失效（非我方发出的请求），直接忽略
-    if (!tid || !this.transactionManager.isValid(tid)) {
+    if (typeof tid !== 'string' || !this.transactionManager.isValid(tid)) {
       logger.warn(`[${tid}] received error for unknown or expired transaction from ${address}:${port}`)
       return Promise.resolve()
     }

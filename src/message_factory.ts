@@ -30,12 +30,11 @@ function normalizeMessage(value: unknown): Message | undefined {
   if (!isDictionary(value)) return undefined
 
   const { t, y } = value
-  if (
-    typeof t !== 'string' || textEncoder.encode(t).length === 0 ||
-    textEncoder.encode(t).length > MAX_TRANSACTION_ID_BYTES
-  ) {
+  const transactionId = toProtocolBytes(t)
+  if (!transactionId || transactionId.length === 0 || transactionId.length > MAX_TRANSACTION_ID_BYTES) {
     return undefined
   }
+  const normalizedTransactionId: TransactionId = t instanceof Uint8Array ? t.slice() : t as string
 
   if (y === MessageType.QUERY) {
     if (typeof value.q !== 'string' || !isDictionary(value.a)) return undefined
@@ -54,7 +53,7 @@ function normalizeMessage(value: unknown): Message | undefined {
     if (value.a.token !== undefined && !token) return undefined
 
     return {
-      t,
+      t: normalizedTransactionId,
       y,
       q: value.q as QueryType,
       a: {
@@ -93,7 +92,7 @@ function normalizeMessage(value: unknown): Message | undefined {
     if (value.r.token !== undefined && !token) return undefined
 
     return {
-      t,
+      t: normalizedTransactionId,
       y,
       r: {
         id,
@@ -112,7 +111,7 @@ function normalizeMessage(value: unknown): Message | undefined {
       return undefined
     }
 
-    return { t, y, e: [value.e[0] as number, value.e[1]] }
+    return { t: normalizedTransactionId, y, e: [value.e[0] as number, value.e[1]] }
   }
 
   return undefined
@@ -166,8 +165,8 @@ function fromBencodeValue(value: BencodeValue): unknown {
 
 /** KRPC 消息结构 */
 export type Message = {
-  /** 事务 ID，2 字节字符串 */
-  t: string
+  /** Opaque transaction ID. Public DHT nodes may use arbitrary binary bytes. */
+  t: TransactionId
   /** 消息类型：query / response / error */
   y: MessageType
   /** 查询类型，仅 query 消息携带 */
@@ -203,6 +202,9 @@ export type Message = {
   /** DHT 协议版本标识（可选），格式为 2 字节客户端标识 + 2 字节版本 */
   v?: string
 }
+
+/** KRPC transaction IDs are opaque byte strings, not necessarily UTF-8 text. */
+export type TransactionId = string | Uint8Array
 
 /**
  * KRPC 消息类型
@@ -314,7 +316,7 @@ export default class MessageFactory {
    * @param tid    事务 ID
    * @param nodeId 本地节点 ID
    */
-  static requestPing(tid: string, nodeId: Id): MessageFactory {
+  static requestPing(tid: TransactionId, nodeId: Id): MessageFactory {
     return new MessageFactory({
       t: tid,
       y: MessageType.QUERY,
@@ -330,7 +332,7 @@ export default class MessageFactory {
    * @param nodeId   本地节点 ID
    * @param targetId 目标节点 ID
    */
-  static requestFindNode(tid: string, nodeId: Id, targetId: Id): MessageFactory {
+  static requestFindNode(tid: TransactionId, nodeId: Id, targetId: Id): MessageFactory {
     return new MessageFactory({
       t: tid,
       y: MessageType.QUERY,
@@ -349,7 +351,7 @@ export default class MessageFactory {
    * @param nodeId   本地节点 ID
    * @param infoHash 目标 info hash（20 字节）
    */
-  static requestGetPeers(tid: string, nodeId: Id, infoHash: Uint8Array): MessageFactory {
+  static requestGetPeers(tid: TransactionId, nodeId: Id, infoHash: Uint8Array): MessageFactory {
     return new MessageFactory({
       t: tid,
       y: MessageType.QUERY,
@@ -370,7 +372,7 @@ export default class MessageFactory {
    * @param port     本地下载端口
    */
   static requestAnnouncePeer(
-    tid: string,
+    tid: TransactionId,
     nodeId: Id,
     infoHash: Uint8Array,
     port: number,
@@ -395,7 +397,7 @@ export default class MessageFactory {
    *
    * @param tid 事务 ID
    */
-  static responsePing(tid: string, nodeId: Id): MessageFactory {
+  static responsePing(tid: TransactionId, nodeId: Id): MessageFactory {
     return new MessageFactory({
       t: tid,
       y: MessageType.RESPONSE,
@@ -409,7 +411,7 @@ export default class MessageFactory {
    * @param tid   事务 ID
    * @param nodes 最近节点列表（将被序列化为紧凑格式）
    */
-  static responseFindNode(tid: string, nodeId: Id, nodes: Node[]): MessageFactory {
+  static responseFindNode(tid: TransactionId, nodeId: Id, nodes: Node[]): MessageFactory {
     const compactNodeList = nodes.map((node) => node.toCompact())
 
     return new MessageFactory({
@@ -435,7 +437,7 @@ export default class MessageFactory {
    * @param token 令牌（可选）
    */
   static responseGetPeers(
-    tid: string,
+    tid: TransactionId,
     nodeId: Id,
     peers?: Peer[],
     nodes?: Node[],
@@ -478,7 +480,7 @@ export default class MessageFactory {
    *
    * @param tid 事务 ID
    */
-  static responseAnnouncePeer(tid: string, nodeId: Id): MessageFactory {
+  static responseAnnouncePeer(tid: TransactionId, nodeId: Id): MessageFactory {
     return new MessageFactory({
       t: tid,
       y: MessageType.RESPONSE,
@@ -493,7 +495,7 @@ export default class MessageFactory {
    * @param errorCode    错误码
    * @param errorMessage 错误描述（可选）
    */
-  static responseError(tid: string, errorCode: ErrorType, errorMessage?: string): MessageFactory {
+  static responseError(tid: TransactionId, errorCode: ErrorType, errorMessage?: string): MessageFactory {
     return new MessageFactory({
       t: tid,
       y: MessageType.ERROR,
