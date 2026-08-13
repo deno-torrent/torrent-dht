@@ -65,6 +65,21 @@ Deno.test('MessageFactory.requestAnnouncePeer - 消息结构正确', () => {
   assertEquals(msg.a?.token, token)
 })
 
+Deno.test('MessageFactory.requestAnnouncePeer - 支持使用 NAT 观察到的源端口', () => {
+  const infoHash = sha1(new TextEncoder().encode('announce-implied-port'))
+  const msg = MessageFactory.requestAnnouncePeer(
+    'de',
+    nodeId,
+    infoHash,
+    6881,
+    tokenBytes('token'),
+    true,
+  ).message()
+
+  assertEquals(msg.a?.implied_port, 1)
+  assertEquals(msg.a?.port, 6881)
+})
+
 // ─── responseError ───────────────────────────────────────────────────────────
 
 Deno.test('MessageFactory.responseError - 错误码与描述正确', () => {

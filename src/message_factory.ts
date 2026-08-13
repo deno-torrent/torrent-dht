@@ -377,6 +377,7 @@ export default class MessageFactory {
     infoHash: Uint8Array,
     port: number,
     token: Uint8Array,
+    impliedPort = false,
   ): MessageFactory {
     return new MessageFactory({
       t: tid,
@@ -384,7 +385,7 @@ export default class MessageFactory {
       q: QueryType.ANNOUNCE_PEER,
       a: {
         id: nodeId.bits.bytes,
-        implied_port: 0,
+        implied_port: impliedPort ? 1 : 0,
         info_hash: infoHash,
         port,
         token: token.slice(),

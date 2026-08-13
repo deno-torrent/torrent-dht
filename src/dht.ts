@@ -62,6 +62,8 @@ export type GetPeersResult = {
 export type AnnouncePeerOptions = {
   /** BitTorrent TCP/uTP listening port; defaults to the DHT node port. */
   port?: number
+  /** Ask the remote node to use the UDP source port observed through NAT. */
+  impliedPort?: boolean
   signal?: AbortSignal
   timeoutMs?: number
   queryTimeoutMs?: number
@@ -373,6 +375,7 @@ export default class DHT {
         this.#krpc.queryAnnouncePeer(node, infoHash, token, port, {
           signal: options.signal,
           timeoutMs: queryTimeoutMs,
+          impliedPort: options.impliedPort,
         })
       ),
     )

@@ -380,7 +380,7 @@ export class KRPC implements Sender {
     infoHash: Uint8Array,
     token: Uint8Array,
     peerPort: number,
-    options: { signal?: AbortSignal; timeoutMs?: number } = {},
+    options: { signal?: AbortSignal; timeoutMs?: number; impliedPort?: boolean } = {},
   ): Promise<void> {
     if (!Id.isValidId(infoHash)) throw new RangeError('infoHash must contain exactly 20 bytes')
     if (!NetUtil.isNetPort(peerPort) || peerPort === 0) throw new RangeError('peerPort must be in range [1, 65535]')
@@ -424,6 +424,7 @@ export class KRPC implements Sender {
         infoHash,
         peerPort,
         token,
+        options.impliedPort,
       )
       void this.#sendTracked(tid, targetNode.port, address, message).catch(finish)
     })
