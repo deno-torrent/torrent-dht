@@ -21,7 +21,7 @@ export default class LocalNode extends Node {
    * @param port the port of the node
    * @returns the local node
    */
-  static async createLocalNode(
+  static createLocalNode(
     port: number,
     options: { publicAddress?: string; bindAddress?: string; nodeId?: Id } = {},
   ): Promise<LocalNode> {
@@ -32,6 +32,6 @@ export default class LocalNode extends Node {
     // used when this node is projected into compact node records, so retain an
     // explicit public address when supplied and otherwise use the bind address.
     const addr = options.publicAddress ?? options.bindAddress ?? '0.0.0.0'
-    return new LocalNode(id, port, addr)
+    return Promise.resolve(new LocalNode(id, port, addr))
   }
 }
